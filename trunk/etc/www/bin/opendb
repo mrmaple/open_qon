@@ -1,0 +1,139 @@
+#!/www/python/bin/python -i
+
+"""$URL: svn+ssh://svn.mems-exchange.org/repos/trunk/dulcinea/bin/opendb $
+$Id: opendb,v 1.2 2004/04/16 06:56:08 pierre Exp $
+
+Opens a ZODB database and drops you into an interactive Python
+interpreter with full access to the ZODB.
+"""
+
+import os
+import sys
+import readline, rlcompleter
+
+# Hack: import the ZODB as soon as possible, because the PTL import
+# hook will screw it up.
+import ZODB
+
+from optparse import OptionParser, Option
+from dulcinea import local
+from dulcinea.site_util import get_dbspec, get_cache_size
+from dulcinea.database import pack_oid, unpack_oid, parse_oid, format_oid
+from dulcinea.database import get_transaction
+from dulcinea.dumper import dump
+from qon.script_util import log, warn
+
+def load_object(connection, oid):
+    """(connection : Connection, oid : long) -> object
+
+    Load an object by unpacked OID.
+    """
+    return connection[pack_oid(oid)]
+
+def commit():
+    get_transaction().commit()
+
+def abort():
+    get_transaction().abort()
+
+#def main ():
+if __name__ == '__main__':
+    usage = "usage: %prog [options] [site]"
+    parser = OptionParser(usage)
+    parser.add_option('-q', '--quiet',
+                      action='store_false', dest='verbose', default=1,
+                      help="run quietly (no help message)")
+    parser.add_option('-e', '--exec-file', dest='script_file',
+                      metavar="FILE",
+                      help="run FILE with execfile() after opening database")
+    parser.add_option('-d', '--dbspec',
+                      metavar="SPEC",
+                      help="open database specified by SPEC")
+    parser.add_option('-f', '--file',
+                      help=("open FileStorage database in FILE "
+                            "(conflicts with -d)"))
+    (options, args) = parser.parse_args()
+
+    if options.dbspec and options.file:
+        parser.error("options -d/--dbspec and -f/--file "
+                     "are mutually exclusive")
+
+    site = os.environ.get("SITE")
+    if not site:
+        if args:
+            site = os.environ['SITE'] = args[0]
+        else:
+            parser.error("not enough arguments: must supply 'site' "
+                         "if $SITE not set")
+
+    if options.dbspec:
+        dbspec = options.dbspec
+    elif options.file:
+        dbspec = "file:" + options.file
+    else:
+        dbspec = get_dbspec(site)
+    db = local.open_database(dbspec)
+    db.set_cache_size(get_cache_size(site))
+
+    vardict = {}
+
+    startup = os.environ.get("PYTHONSTARTUP")
+    if startup and os.path.exists(startup):
+        execfile(startup, vardict)
+
+    readline.parse_and_bind("tab: complete")
+
+    log("database roots available:\n", options=options)
+    L = db.get_root_names()
+    L.sort()
+    vardict['db'] = db
+    for root_name in L:
+        log("  %s\n" % root_name, options=options)
+        cmd = "%s = db.get_root_object('%s')" % (root_name, root_name)
+        try:
+            exec cmd in vardict
+            exec cmd
+        except:
+            (exc_type, exc_value, tb) = sys.exc_info()
+            warn("unable to access database root '%s':\n%s: %s" %
+                 (root_name, exc_type.__name__, exc_value))
+
+    log("""
+other variables and functions:
+  db
+  database
+  connection
+  storage
+  root
+  load_object(oid : long) -> object
+  commit() = get_transaction().commit()
+  abort()  = get_transaction().abort()
+  sync()   = connection.sync()\n""", options=options)
+    def l_o (oid, conn=db.get_connection()):
+        return load_object(conn, oid)
+    d = dict([('database', db.get_database()),
+              ('connection', db.get_connection()),
+              ('storage', db.get_storage()),
+              ('root', db.get_root()),
+              ('sync', db.get_connection().sync),
+              ('load_object', l_o),
+              ('commit', commit),
+              ('abort', abort),
+              ])
+    vardict.update(d)
+    if options.script_file:
+        print "executing %s..." % options.script_file
+        execfile(options.script_file, vardict)
+
+    try:
+        from pyrepl.python_reader import ReaderConsole
+        have_pyrepl = 1
+    except ImportError:
+        have_pyrepl = 0
+    if have_pyrepl:
+        from pyrepl.unix_console import UnixConsole
+        con = UnixConsole(1, None)
+        ReaderConsole(con, vardict).interact()
+        sys.exit()
+
+#main()

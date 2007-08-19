@@ -1,0 +1,43 @@
+/*
+** Table-based column layout for all browsers.
+** By Alexander Limi, http://www.plonesolutions.com
+**
+** There's a table-less column layout alternative in the plone_tableless
+** skin layer, if you prefer layouts without tables.
+*/
+
+/*  */
+
+#portal-columns {
+    width: 100% !important;
+}
+
+#portal-column-one {
+    vertical-align: top;
+    width: 16em;
+}
+
+#portal-column-content {
+    vertical-align: top;
+    margin: 0;
+    padding: 0;
+}
+
+#portal-column-two {
+    vertical-align: top;
+    width: 16em;
+}
+
+/* Padding for the columns */
+
+#portal-column-one .visualPadding {
+    padding: 2em 0em 1em 2em;
+}
+#portal-column-content .visualPadding {
+    padding: 0em 2em 1em 2em;
+}
+#portal-column-two .visualPadding {
+    padding: 2em 2em 1em 0em;
+}
+
+/*  */

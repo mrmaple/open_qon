@@ -1,0 +1,1280 @@
+"""
+$Id: group.ptl,v 1.83 2007/06/14 14:59:43 jimc Exp $
+
+Group home page
+"""
+__pychecker__ = "no-noeffect unusednames=request"
+from datetime import datetime, timedelta
+from quixote import get_request
+from quixote.html import href, htmlescape, nl2br, htmltext
+from quixote.errors import AccessError, TraversalError
+from dulcinea.errors import NotLoggedInError
+from dulcinea.ui.util import item_list, li
+
+from qon.base import get_user, get_group_database, get_user_database, get_tags_database
+from qon.group import Group
+from qon.ui import blocks
+from qon.ui.form import manage_form
+import qon.ui.group.form
+from qon.ui.base import QonBaseUI
+from qon.ui import util
+from qon.util import unique_items, xml_escape
+import qon.api
+
+from qon.ui.message import NewMessageForm
+
+from qon.ui import messages
+_ = messages.t
+def _h(x): return htmltext(_(x))
+
+_q_exports = ['new']  # add to __init__.py also
+
+def _group_home_tabs [html] (request):
+    tabs = ( 
+        {
+            'name': 'Most active',
+            'path': '/group/active/',
+            'accesskey': 'r',
+            'class': 'plain',
+        },
+        {
+            'name': 'New groups',
+            'path': '/group/recent/',
+            'accesskey': 'n',
+            'class': 'plain',
+        },
+        {
+            'name': 'All Groups',
+            'path': '/group/all/',
+            'accesskey': 'a',
+            'class': 'plain',
+        },
+        {
+            'name': 'Browse',
+            'path': '/group/browse/',
+            'accesskey': 'b',
+            'class': 'plain',
+        },               
+        )
+    
+    '''
+    <h1>Groups</h1>
+    '''
+    blocks.util.section_tabs(request, tabs,
+        getattr(request, str('qon_section_mode'), ''))
+    
+
+
+def _q_access(request):
+    # hook in here to add global menu for group/
+    blocks.util.set_global_mode(request, 'Groups')
+    blocks.util.set_section_tabs(request, _group_home_tabs)
+    
+    menus = [
+        {
+            'name': 'Tools',
+            'items': [
+                {
+                    'name': 'New group',
+                    'path': '/group/new',
+                    'title': 'Create a new group',
+                    'disabled': not get_group_database().can_create_group(get_user()),
+                },
+            ],
+        },
+        ]
+    
+    blocks.util.set_menus(request, menus)
+    blocks.util.set_help_block(request, _('Group Browser'))
+
+
+def _q_lookup(request, name):
+    if name == 'active':
+        return ActiveUI(request, name)
+    elif name == 'recent':
+        return NewUI(request, name)
+    elif name == 'all':
+        return AllUI(request, name)
+    elif name == 'browse':
+        return BrowseUI(request, name)    
+    return GroupUI(request, name)
+    
+def _q_index [html] (request):
+    # /group/ gets redirectd to /group/active/ to make active the default tab
+    return request.redirect(str('./active/'))
+
+def get_crumb():
+    return _('Groups')
+
+   
+def new [html] (request):
+    title = _("Create a new group")
+    user = get_user()
+    
+    if not user:
+        raise AccessError
+        
+    blocks.util.set_section_mode(request, 'My groups')
+    
+    if get_group_database().can_pay_for_new_group(user):
+        manage_form(request, qon.ui.group.form.NewGroupForm,
+            page_title=title, heading_text=_h(html_new_group_heading),
+            preview_text=_h(messages.preview_text),
+            commit_title=title+': group created',
+            commit_text=_h(html_new_group_commit),
+            commit_repl='RESULT',
+            access_test=user and get_group_database().can_create_group(user),
+            access_sorry='<p class="alert">Sorry, you don\'t have permission to create a new group.</p>',
+            user=user
+            )
+    else:
+        blocks.util.header(request, title)
+        '''<h1>%s</h1>''' % title
+        '''<p class="alert">Sorry, you don't have enough points in your feedback bank to create a new group.</p>
+        <p>It costs %d point to create a new group.
+        You have %d points in your feedback bank.
+        You can earn more points in your feedback bank
+        through your activity on the site, such as reading, posting comments or contributing to workspace pages.
+        You also earn points quickly whenever you receive positive feedback from other users.</p>
+        ''' % (get_group_database()._karma_new_group, user.get_karma_bank_balance())
+        blocks.util.footer()
+               
+def _group_info [html] (request, group, title):
+    '<h1>%s</h1>' % blocks.group.display_name_plain(group)
+    '<p class="subtitle">'
+    blocks.user.owners(group)
+    '<br />'
+    blocks.user.sponsors(group)
+    '<br />'
+    blocks.group.status(group)
+    '<br />'
+    '''<span class="title">'''
+    _('Formed:')
+    ''' </span>'''
+    blocks.util.format_datetime(group.date)
+
+    '<br />'
+    blocks.group.access(group)
+    '<br />'
+    blocks.group.membership(group)
+    '<br />'
+    blocks.group.members(group)
+    '<br />'
+    blocks.user.karma(group)
+    '<br />'
+    blocks.group.belongs_to(group)
+    # '<br />'
+    # blocks.group.voting(group)
+
+    subgroups = group.get_group_members()
+    if subgroups:
+        '<h2>'
+        _('Member groups')
+        '</h2>'
+        blocks.group.format_group_list_simple(subgroups)
+    '</p>'
+
+
+
+class GroupUI(QonBaseUI):
+    """Interface for /group/group_name/
+    """
+
+    _q_exports = ['about', 'subgroups', 'sponsor']
+
+    def __init__(self, request, name):
+        if not name:
+            raise TraversalError
+            
+        try:
+            self.group = get_group_database()[name.lower()]
+        except KeyError:
+            self.group = None
+            
+
+        if self.group:
+            user = get_user()
+
+            self.blog_atom = blocks.util.full_url(blocks.blog.path_to_blog(self.group.get_blog()) + 'atom.xml')
+            self.ws_atom = blocks.util.full_url(blocks.wiki.path_to_wiki(self.group.get_wiki()) + 'atom.xml')
+            self.other_header = '''<link rel="service.feed" type="application/atom+xml" href="%s" title="%s" />''' % (
+                self.blog_atom, xml_escape(self.group.get_blog().watchable_name()))
+            self.other_header += '''\n<link rel="service.feed" type="application/atom+xml" href="%s" title="%s" />''' % (
+                self.ws_atom, xml_escape(self.group.get_wiki().watchable_name()))
+
+            
+            menus = [
+                {
+                    'name': _('Invite'),
+                    'path': 'member/invite',
+                    'title': _('Invite new users to join this group'),
+                    'disabled': not self.group.get_members().can_manage(user),
+                },
+                {
+                    'name': _('Group PM'),
+                    'path': 'manage/pm_group',
+                    'title': _('Send a Private Message to all members'),
+                    'disabled': not self.group.can_manage(user),
+                },
+                {
+                    'name': _('Leave'),
+                    'path': 'member/leave',
+                    'title': _('Cancel your membership in this group'),
+                    'disabled': not self.group.is_member(user),
+                },
+                {
+                    'name': _('Settings'),
+                    'path': 'manage/settings',
+                    'title': _("Adjust this group's settings"),
+                    'disabled': not self.group.can_manage(user),
+                },
+                ]
+            
+            if self.group.can_manage(user) and not self.group.is_accepted():
+                menus.append(
+                    {
+                        'name': _('Delete'),
+                        'path': 'manage/delete',
+                        'title': _("Delete this group"),
+                    })
+    
+            if user and user.is_admin():
+                menus.append(
+                    {
+                        'name': _('Staff access'),
+                        'path': 'staff/',
+                        'title': _("Double secret probation access"),
+                    })
+
+            menus.append(
+                {
+                    'name': _('About'),
+                    'path': 'about',
+                    'title': _("Show detailed information about this group and and its owners and members"),
+                })
+            
+            blocks.util.set_global_mode(request, 'Groups')
+            blocks.util.set_section_tabs(request, None)
+            blocks.util.set_group_mode(request, self.group, 'Home')
+        
+            blocks.util.set_menus(request, menus)
+            blocks.util.set_help_block(request, _('Group Home page'))
+
+            # cookie this page
+            blocks.util.cookie_this_page(self.group)
+            
+    def _q_lookup(self, request, name):
+        if name == 'ws':
+            from qon.ui.wiki.wiki import WikiUI
+            return WikiUI(request, self.group)
+            
+        elif name == 'member':
+            return GroupMemberUI(request, self.group, get_user())
+            
+        elif name == 'manage':
+            return GroupPrivateUI(request, self.group)
+            
+        elif name == 'news':
+            from qon.ui.blog import DiscussionsUI
+            return DiscussionsUI(request, self.group)
+                        
+        elif name == 'file':
+            from qon.ui.file import FileUI
+            return FileUI(request, self.group)
+
+        elif name == 'poll':
+            from qon.ui.poll import PollUI
+            return PollUI(request, self.group)
+            
+        elif name == 'whats_hot':
+            return GroupWhatsHotUI(request, self.group)
+
+        elif name == 'issues':
+            from qon.ui.ticket import TrackersUI
+            return TrackersUI(request, self.group)
+            
+        elif name == 'staff':
+            return GroupStaffUI(request, self.group)
+
+        elif name == 'tags':
+            return GroupTagsUI(request, self.group)
+
+        else:
+            # a little help for short URL references to wiki pages
+            from quixote.util import Redirector
+            from qon.ui.blocks.wiki import path_to_wiki
+            return Redirector(path_to_wiki(self.group.wiki) + '%s/' % name)
+            
+        return None
+            
+    def _q_access(self, request):
+        if self.group is None:
+            raise TraversalError
+                
+    def _q_index [html] (self, request):
+        # /group/group-name/
+
+        blocks.util.add_feed_block(request, {'RSS': [('Discussions', self.blog_atom), ('Workspace', self.ws_atom)],
+                })
+        
+        blocks.util.set_menu_mode(request, './')
+        
+        user = get_user()
+
+        title = self.group.name
+        
+        blocks.util.header(request, title, other_header=self.other_header)
+        if self.group.is_accepted():
+            # shorter heading for active groups
+            '<h1>%s</h1>' % (blocks.group.display_name_plain(self.group))
+            '<p class="subtitle">'
+            # feedback score, (sum of the karma of all the users in the group.)
+            #blocks.user.karma(self.group)
+            # 
+            #Active | 3 owners | 32 members | 123 discussions | 1000 comments | 52 workspace pages | Content Indexed? Yes | more
+            blocks.group.group_activity_stats(self.group)
+
+            # 
+            '</p>'
+        else:
+            # pending groups show full 'about' header
+            _group_info(request, self.group, title)
+
+        subgroups = self.group.get_group_members()
+        if not subgroups and not user and not self.group.anon_read:
+            # this is a leaf group and user can't read it
+            '<p class="alert">'
+            _('You are not signed in.')
+            '</p>'
+        
+
+        '''<hr height="1" />'''
+
+        blocks.user.about(self.group, no_box=1)
+        blocks.action.action_vote_sponsor(self.group)
+        blocks.action.action_join(self.group)
+
+        # give 'em a tag cloud for this group
+        tags_n_counts = self.group.get_tags_n_counts(limit=1000)
+        if tags_n_counts:
+            '''<h2>'''
+            _('Group Tags')
+            '''</h2>'''
+            blocks.tags.cloud(tags_n_counts, self.group)
+        
+        if self.group.can_read(user) and self.group.is_accepted():
+            '''<h2>'''
+            _('Recent activity')
+            '''</h2>'''
+            blocks.group.list_summaries([self.group], count=5)
+
+        blocks.util.footer()
+        
+    def about [html] (self, request):
+        title = self.group.name
+        blocks.util.set_menu_mode(request, 'about')
+        blocks.util.header(request, title, other_header=self.other_header)
+        _group_info(request, self.group, title)
+        blocks.user.about(self.group)
+        blocks.util.footer()
+        
+    def subgroups [html] (self, request):
+        blocks.util.set_menu_mode(request, 'subgroups')
+        title = "Member groups of %s" % self.group.name
+        blocks.util.header(request, title)
+        '<h2>%s</h2>' % title
+        blocks.group.format_group_list(self.group.get_group_members(), karma=0)
+        blocks.util.footer()
+    
+    def sponsor [html] (self, request):
+        title = _('Sponsor group %s') % self.group.name
+        user = get_user()
+        if user is None:
+            raise AccessError
+            
+        if self.group.get_state() == 'pending':
+            
+            if user not in self.group.get_sponsors():
+                h='''<p>This group is seeking additional sponsors in order to become active. If you
+                approve of this group, please consider sponsoring it. Your name
+                will be attached as a sponsor. Once you sponsor a group, you cannot change your
+                mind.</p>
+                <p>
+                <span class="alert">NOTE:</span> It costs <strong>5</strong> points from your feedback
+                bank to sponsor a group.
+                </p>
+                '''
+            else:
+                h='''<p>
+                You are already a sponsor of this group. New groups need %s sponsors (including you) before they become
+                active. Contact your associates and ask them to come to this page to sponsor this group.
+                </p>
+                ''' % self.group._min_sponsors
+        
+            manage_form(request, qon.ui.group.form.SponsorGroupForm,
+                page_title=title,
+                heading_text=h,
+                commit_text='<p class="info">You have sponsored this group.</p>',
+                access_test=user and get_group_database().can_pay_to_sponsor_group(user),
+                access_sorry='''<p class="alert">Sorry, you don't have enough points in your feedback bank to sponsor a group.</p>''',
+                group=self.group,
+                user=user)
+        else:
+            raise AccessError, '''<p class="alert">This group is already active.</p>'''
+    
+        
+    def get_crumb(self):
+        # this is called even if _q_access raises an exception :-(
+        if self.group is not None:
+            return self.group.name
+        else:
+            return ''
+            
+class GroupMemberUI(QonBaseUI):
+
+    _q_exports = ['leave', 'invite']
+    
+    def __init__(self, request, group, user):
+        self.group = group
+        self.user = user
+        
+        blocks.util.prefix_menu_paths(request, '../')
+        
+    def _q_access(self, request):
+        if not self.group.is_member(self.user) and not self.group.is_owner(self.user):
+            raise AccessError
+            
+    def leave [html] (self, request):       
+        blocks.util.set_menu_mode(request, '../member/leave')
+        title = "Leave group %s" % self.group.name
+
+        owner_text = ''
+        if self.group.is_owner(self.user):
+            owner_text = ' and resign as an owner'
+            
+        heading_text = '<p class="alert">'
+        heading_text += _('Are you sure you want to leave this group' + owner_text + '?')
+        heading_text += '</p>'
+        
+        solo = self.group.sole_owned_group_members(self.user)
+        if solo:
+            heading_text += '<p class="alert">'
+            heading_text += _('The following groups, of which you are the only owner who is a member of this group, will also leave this group.')
+            heading_text += '</p>'
+            heading_text += blocks.group.list_bullet(solo, _('These groups will also leave') + ' %s' % self.group.name)
+            
+        manage_form(request, qon.ui.group.form.LeaveGroupForm,
+            page_title=title,
+            heading_text=heading_text,
+            commit_text='<p class="info">' + _('You have left the group.') + '</p>',
+            access_test=self.group.is_member(self.user),
+            access_sorry='<p class="alert">' + _('You are not a member of this group.') + '</p>',
+            group=self.group,
+            user=self.user
+            )
+
+    def invite [html] (self, request):
+        blocks.util.set_menu_mode(request, '../member/invite')
+        if not self.group.is_accepted():
+            raise AccessError, \
+                '<p class="alert">' + _('Sorry, this feature is not available until this group is active.') + '</p>'
+                
+        if not self.group.get_members().can_manage(get_user()):
+            raise AccessError
+
+        title = _('Invite users into group') + ' %s' % blocks.group.display_name_plain(self.group)
+        result = [1]
+        manage_form(request, qon.ui.group.form.InviteForm,
+            page_title=title,
+            heading_text='<p><strong>' + _('Owner:') + '</strong> '+ _('Use this form to invite other users into this group. ') +
+                _('Enter a list of email addresses separated by spaces or one on each line.') +
+                '</p>',
+            commit_text='<p class="info">' + _('The following users have been invited to join this group:') + '</p>'
+                '<ul>%s</ul>',
+            commit_repl='RESULT',
+            result_store=result,
+            group=self.group,
+            user=get_user())
+    
+# ------------------------------------------------------------------------------------------
+
+class GroupWhatsHotUI(QonBaseUI):
+
+    _q_exports = ['all', 'hot_discussions', 'hot_comments', 'hot_ws', 'hot_new', 'hot_most_watched', 'hot_most_read']
+    # no breadth minimum at the group level yet
+    _min_breadth = 0
+
+    def __init__(self, request, group):
+        self.group = group
+
+        blocks.util.set_global_mode(request, 'Groups')
+        #blocks.util.set_group_mode(request, self.group, "What's Hot")
+        blocks.util.set_group_mode(request, self.group, "Popular")
+        menus = [
+
+            {   # must be item 3: WikiOneRevUI.__init__
+                'name': 'highest rated',
+                'title': 'multiple views of highest rated items',
+                'items':
+                [
+                {
+                    'name': 'all highly rated',
+                    'path': '.',
+                    'title': 'all items that have high ratings',
+                },
+                {
+                    'name': 'discussions',
+                    'path': 'hot_discussions',
+                    'title': 'what discussions are hot in this group',
+                },
+                {
+                    'name': 'comments',
+                    'path': 'hot_comments',
+                    'title': 'comments that are hot in this group',
+                },
+                {
+                    'name': 'workspace pages',
+                    'path': 'hot_ws',
+                    'title': 'workspace pages that are hot in this group',
+                },
+                ],
+            },
+            {
+                'name': 'most watched',
+                'path': 'hot_most_watched',
+                'title': 'Items that people have in their watch list.',
+            },
+            {
+                'name': 'most widely read',
+                'path': 'hot_most_read',
+                'title': 'What people are reading.',
+            },
+            ]
+        blocks.util.set_menus(request, menus)
+        #blocks.util.set_help_block(request, "What's Hot")
+        blocks.util.set_help_block(request, "Popular")
+
+    def _q_access(self, request):
+        if self.group is None:
+            raise TraversalError
+
+    def _q_index [html] (self, request):
+        blocks.util.set_menu_mode(request, './')
+
+        title = "Highest Rated in %s" % self.group.name
+        blocks.util.header(request, title)
+        # show them what's hot.
+        '<h1>%s</h1>' % title
+
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Discussion'), str('DiscussionComment'), 
+            str('Usernews'), str('UsernewsComment'), str('Wikipage'), str('Poll')), 
+            group=self.group.get_user_id(), minKarma = 1, showGroup=False, min_breadth=self._min_breadth) 
+            
+        blocks.util.footer()
+
+    def hot_discussions [html] (self, request):
+
+        blocks.util.set_menu_mode(request, 'hot_discussions')
+
+        title = "Highest Rated Discussions in %s" % self.group.name
+        blocks.util.header(request, title)
+        # show them what's hot.
+        '<h1>%s</h1>' % title
+
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Discussion'), ), 
+           group=self.group.get_user_id(), minKarma = 1, showGroup=False, min_breadth=self._min_breadth) 
+
+        blocks.util.footer()
+
+    def hot_comments [html] (self, request):
+
+        blocks.util.set_menu_mode(request, 'hot_comments')
+
+        title = "Highest Rated Comments in %s" % self.group.name
+        blocks.util.header(request, title)
+        # show them what's hot.
+        '<h1>%s</h1>' % title
+
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('DiscussionComment'),), 
+            group=self.group.get_user_id(), minKarma = 1, 
+            showGroup=False, showComments=False, min_breadth=self._min_breadth) 
+
+        blocks.util.footer()
+
+    def hot_ws [html] (self, request):
+
+        blocks.util.set_menu_mode(request, 'hot_ws')
+
+        title = "Highest Rated Workspace Pages in %s" % self.group.name
+        blocks.util.header(request, title)
+        # show them what's hot.
+        '<h1>%s</h1>' % title
+
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Wikipage'),), 
+            group=self.group.get_user_id(), minKarma = 1, showGroup=False, 
+            showComments=False, min_breadth=self._min_breadth) 
+
+        blocks.util.footer()
+
+    def hot_new [html] (self, request):
+
+        blocks.util.set_menu_mode(request, "hot_new")
+
+        title = "What's new in %s" % self.group.name
+        blocks.util.header(request, title)
+        # show them what's hot.
+        '<h1>%s</h1>' % title
+
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Discussion'), str('DiscussionComment')), 
+            group=self.group.get_user_id(), minKarma = 1, min_breadth=self._min_breadth) 
+
+        blocks.util.footer()
+
+    def hot_most_watched [html] (self, request):
+        from qon.base import get_list_database
+
+        blocks.util.set_menu_mode(request, 'hot_most_watched')
+
+        title = "Most watched in %s" % self.group.name
+        blocks.util.header(request, title)
+        # show them what's hot.
+        '<h1>%s</h1>' % title
+
+        most_watched = get_list_database().most_watched()
+        cells = []
+
+        for (count, obj) in most_watched:
+            # is try/except block so that we only show objects that have the can_read() routine defined
+            try:
+                if obj.can_read(get_user()): 
+                    group = qon.ui.blocks.util.group_from_object(obj)
+                    if group is self.group:
+                        cells.extend([qon.ui.blocks.util.fancy_one_line_display(obj, dont_bold=True), count])
+            except:
+                pass
+
+        '''
+        <p class="formHelp">
+        Ranked by number of users who are watching an item.
+        </p>
+        '''
+
+        if len(cells) > 0:
+    
+            blocks.util.format_table(2, cells, headings=['Most Watched', 'Users'],
+                    table_class="forum-listing-tight",
+                    centered_columns=[1])
+        else:
+            '''No items'''
+
+        '''
+        <p class="formHelp">
+        Rankings are updated hourly, even though the ratings on individual items are up to date.
+        </p>
+        '''
+        blocks.util.footer()
+
+    def hot_most_read [html] (self, request):
+        from qon.base import get_list_database
+
+        blocks.util.set_menu_mode(request, 'hot_most_read')
+
+        title = "Most widely read in %s" % self.group.name
+        blocks.util.header(request, title)
+        # show them what's hot.
+        '<h1>%s</h1>' % title
+
+        most_read = get_list_database().most_read_items()
+        cells = []
+        for (count, obj) in most_read:
+            if obj.can_read(get_user()): 
+                group = qon.ui.blocks.util.group_from_object(obj)
+                if group is self.group:
+                    cells.extend([qon.ui.blocks.util.fancy_one_line_display(obj, dont_bold=True), count])
+        '''
+        <p class="formHelp">
+        Ranked by number of users who have read an item. Includes only discussion items active in the last 3 days.
+        </p>
+        '''
+
+        if len(cells) > 0:
+            blocks.util.format_table(2, cells, headings=['Most Read', 'Users'],
+                table_class="forum-listing-tight",
+                centered_columns=[1])
+        else:
+            '''No items'''
+
+        '''
+        <p class="formHelp">
+        Rankings are updated hourly, even though the ratings on individual items are up to date.
+        </p>
+        ''' 
+
+        blocks.util.footer()
+
+class GroupPrivateUI(QonBaseUI):
+
+    _q_exports = ['settings', 'members', 'owner_demote',
+        'owner_promote', 'member_remove', 'owner_resign', 'delete', 'pm_group']
+    
+    def __init__(self, request, group):
+        self.group = group
+        blocks.util.prefix_menu_paths(request, '../')
+        
+    def _q_access(self, request):
+        if self.group is None:
+            raise TraversalError
+
+        if not self.group.can_manage(get_user()):
+            raise AccessError
+
+    def _q_index(self, request):
+        return request.redirect('./settings')
+        
+    def get_crumb(self):
+        # this is called even if _q_access raises an exception :-(
+        if self.group is not None:
+            return 'Settings'
+        else:
+            return ''
+
+    def pm_group [html] (self, request):
+        blocks.util.set_menu_mode(request, '../manage/pm_group')
+
+        karma_cost = get_group_database()._karma_pm_group
+        group_name = self.group.display_name()
+        group_owner = blocks.util.display_name_plain(get_user())
+
+        group_members = self.group.get_member_list()
+        non_member_owners = [u for u in self.group.owners if u not in group_members]
+        # for our purposes, members includes owners
+        group_members.extend(non_member_owners)
+
+        subject_prefix = "Group PM: "
+        # the asterisks make this italic in reStructured text. 
+        body_prefix="*This is a message to all members of the %s group from group owner %s.*\n\n" % (group_name, group_owner)
+
+        access = True
+        access_sorry = None
+        if  not get_group_database().can_pay_for_pm_group(get_user()):
+            # need more karma for testing? Use: get_user().add_karma_bank(50)          
+            access = False
+            access_sorry = '<p class="alert">Sorry, you don\'t have the one point necessary to PM the group.</p>'
+
+        heading_text = '''<p><span class="title">Posting to:</span> <B>ALL</B> %i members of %s <br />
+        <span class="title">Cost:</span> %d point from your feedback bank. Current bank balance: %d. </p>
+        ''' % (len(group_members), group_name, karma_cost, get_user().get_karma_bank_balance())
+
+        footer_text = '''<p><span class="alert">NOTE:</span> %d point will be deducted from your feedback
+        bank to send a private message to all members of the group.</p>''' % (karma_cost)
+
+        commit_text = '<p class="info">Your message has been sent. One point has been deducted from your feedback bank. <a href="../">Click here</a> to continue.</p>'
+
+        manage_form(request, NewMessageForm,
+            page_title="PM members of %s" % group_name,
+            preview_text=_h(messages.preview_text_send),
+            access_test=access,
+            access_sorry=access_sorry,
+            commit_text=commit_text,
+            user=group_members,
+            heading_text=heading_text,
+            footer_text=footer_text,
+            group=self.group,
+            # the str() is there to solve some over-quoting when htmltexts are concatenated with +
+            subject_prefix=str(subject_prefix),
+            body_prefix=str(body_prefix),
+            karma_cost=karma_cost)
+
+    def delete [html] (self, request):
+        blocks.util.set_menu_mode(request, '../manage/delete')
+
+        manage_form(request, qon.ui.group.form.DeleteGroupForm,
+            page_title='Delete group: %s' % blocks.group.display_name_plain(self.group),
+            heading_text='<p class="alert">'+_('Once you delete this group, it cannot be recovered.')+'</p>',
+            commit_text='<p class="info">'+_('Your group has been deleted.')+'</p>',
+            access_test= not self.group.is_accepted(),
+            access_sorry='<p class="alert">'+_('You cannot delete a group once it is active.')+'</p>',
+            group=self.group
+            )
+    
+    def settings [html] (self, request):
+        blocks.util.set_menu_mode(request, '../manage/settings')
+        title = "Group settings for %s" % blocks.group.display_name_plain(self.group)
+        
+        heading_text =_('''<p class="formHelp">
+        This page allows you to control all aspects of your group, including its name, description, owners,
+        and membership policies. You can also select other groups to associate with.
+        </p>
+        <ul>
+        <li><span class="info">New!</span> <a href="./members">Manage owners and members</a></li>
+        </ul>
+        ''')
+                
+        manage_form(request, qon.ui.group.form.SettingsForm,
+            page_title=title,
+            heading_text=heading_text,
+            preview_text=_h(messages.preview_text),
+            commit_text='<p class="info">'+_('Your changes have been recorded.')+'</p>',
+            group=self.group)
+            
+    def members [html] (self, request):
+        cur_user = get_user()
+        blocks.util.set_menu_mode(request, '../manage/members')
+        title = "Members of %s" % blocks.group.display_name_plain(self.group)
+        blocks.util.header(request, title)
+        
+        rows = []
+        for u in self.group.owners:
+        
+            if u is not cur_user:
+                action = href('owner_demote?u=%s' % u.get_user_id(), 'Remove as owner')
+            else:
+                action = href('owner_resign?u=%s' % u.get_user_id(), 'Resign as owner')
+
+            rows.append((blocks.util.display_name(u),
+                'Owner',
+                action,
+                ))
+            
+        
+        for u in self.group.get_member_list():
+            if u in self.group.owners:
+                continue
+            
+            if isinstance(u, Group):
+                type = 'Group'
+                action = href('member_remove?u=%s' % u.get_user_id(), 'Remove')
+            else:
+                type = 'Member'
+                action = href('owner_promote?u=%s' % u.get_user_id(), 'Make owner') + ', ' + \
+                    href('member_remove?u=%s' % u.get_user_id(), 'Remove')
+                
+            rows.append((blocks.util.display_name(u),
+                type,
+                action,
+                ))
+        
+        '''<h1>Manage group members</h1>
+        <p class="formHelp">
+        Here you can remove owner privileges from other owners, or remove users as members of this group.
+        </p>
+        '''
+        blocks.util.format_table_rows(rows, headings=('Name', 'Type', 'Action'))
+        blocks.util.footer()
+        
+    def _owner_remove(self, user, user_id):
+        qon.api.group_remove_owner(user, user_id, self.group)
+        
+    def owner_demote (self, request):
+        user_id = request.get_form_var('u')
+        user = get_user_database().get_user(user_id)
+
+        if user is not get_user():              # can't remove yourself
+            self._owner_remove(get_user(), user_id)
+            
+        return request.redirect('./members')
+        
+    def owner_promote(self, request):
+        user_id = request.get_form_var('u')
+        
+        owners_user_id = qon.api.group_get_owners_user_id(self.group)
+        if user_id not in owners_user_id:
+            owners_user_id.append(user_id)
+            qon.api.group_set_owners_by_user_id(get_user(), self.group, owners_user_id)
+            
+        return request.redirect('./members')
+
+    def owner_resign [html] (self, request):
+        cancel = request.get_form_var('cancel')
+        if cancel:
+            return request.redirect(str('./members'))
+            
+        user_id = request.get_form_var('u')
+        confirm = request.get_form_var('c')
+        
+        user = get_user_database().get_user(user_id)
+        
+        if user is not get_user():
+            # user can only resign himself
+            return request.redirect(str('./members'))
+            
+        if confirm:
+            self._owner_remove(get_user(), user_id)
+            return request.redirect(str('../'))
+        else:
+            title = "Confirm resignation"
+            blocks.util.header(request, title)
+            '''<h1>%s</h1>''' % title
+            '''<p class="alert">Are you sure you want to remove yourself as an owner of this group?</p>
+            <p>You will remain a member, but you will not be able to undo this action. If you need to become
+            an owner of this group again, you will have to ask one of the other owners to make you an owner.</p>
+            <form action="./owner_resign">
+            <input type="hidden" name="u" value="%(user_id)s" />
+            <input type="hidden" name="c" value="1" />
+            <input type="submit" name="cancel" value="Cancel" />
+            <input type="submit" name="submit" value="Resign as owner" />
+            </form>
+            ''' % dict(user_id=user_id)
+            blocks.util.footer()
+
+    def member_remove [html] (self, request):
+        cancel = request.get_form_var('cancel')
+        if cancel:
+            return request.redirect(str('./members'))
+            
+        user_id = request.get_form_var('u')
+        confirm = request.get_form_var('c')
+        
+        user = get_user_database().get_user(user_id)
+        if not user:
+            user = get_group_database().get_group(user_id)
+        
+        if confirm:
+            qon.api.group_leave(self.group, user)
+            return request.redirect(str('./members'))
+        else:
+            title = "Remove member %s from group" % blocks.util.display_name_plain(user)
+            blocks.util.header(request, title)
+            '''<h1>%s</h1>''' % title
+            '''<p class="alert">Are you sure you want to remove %(user_name)s from this group?</p>
+            <form action="./member_remove">
+            <input type="hidden" name="u" value="%(user_id)s" />
+            <input type="hidden" name="c" value="1" />
+            <input type="submit" name="cancel" value="Cancel" />
+            <input type="submit" name="submit" value="Remove this user" />
+            </form>
+            ''' % dict(user_name=blocks.util.display_name_plain(user), user_id=user_id)
+            blocks.util.footer()
+
+class GroupStaffUI(QonBaseUI):
+    """UI for Staff-only functions on groups."""
+    
+    _q_exports = ['accept', 'delete']
+    
+    def __init__(self, request, group):
+        self.group = group
+        
+        menus = [
+            {
+                'name': _('Accept this group'),
+                'path': 'accept',
+            },
+            {
+                'name': _('Delete this group'),
+                'path': 'delete',
+            },
+            ]
+        
+        blocks.util.set_menus(request, menus)
+        blocks.util.set_section_mode(request, 'Admin')
+        
+    def _q_access(self, request):
+        user = get_user()
+        if not user or not user.is_admin():
+            raise AccessError
+
+    def _q_index [html] (self, request):
+        title = blocks.group.display_name_plain(self.group) + " Group admin"
+        
+        blocks.util.header(request, title)
+        '<h2>%s</h2>' % title
+        '<div class="box">'
+        '<span class="subtitle"><span class="title">Member list: </span>'
+        blocks.user.list(self.group.get_member_list())
+        '</span>'
+        '</div>'
+        blocks.util.footer()
+        
+    def accept(self, request):
+        if not self.group.is_accepted():
+            qon.api.group_force_accept_simple(get_user(), self.group)
+        return request.redirect('..')
+        
+    def delete [html] (self, request):
+        manage_form(request, qon.ui.group.form.AdminDeleteGroupForm,
+            page_title='Delete group: %s' % blocks.group.display_name_plain(self.group),
+            heading_text='<p class="alert">Once you delete this group, it cannot be recovered.</p>',
+            commit_text='<p class="info">Your group has been deleted.</p>',
+            access_test= get_user().is_admin(),
+            access_sorry='<p class="alert">You don\'t have permission to do this.</p>',
+            group=self.group
+            )
+
+
+class GroupTagsUI(QonBaseUI): 
+    _q_exports = []
+
+    def __init__(self, request, group):
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Tagged Items')
+        self.group = group
+
+    def _q_index [html] (self, request):
+        title = 'Tagged items'
+        blocks.util.header(request, title)
+        user = get_user()
+        '<h2>%s</h2>' % title
+        '<br />'
+
+        '''
+        <p class="formHelp">
+        Displays the items with the chosen tags.
+        </p>
+        '''
+
+        item_oids = get_tags_database().get_items(self.tag)
+
+        if item_oids:
+            blocks.tags.tagged_items_table(item_oids)
+        else:
+            "Nothing has been tagged with %s." % self.tag
+
+        blocks.util.footer()
+
+    def get_crumb(self):
+        return "Tagged items"    
+
+    def _q_lookup(self, request, component):
+        return self.tag_results(request, component)
+
+    def tag_results [html](self, request, component):
+        tags = component.split(str(','))
+        tags_str = ', '.join(tags)
+        tags_db = get_tags_database()
+
+        title = 'Items tagged with %s' % tags_str
+
+        blocks.util.header(request, title)
+        user = get_user()
+        '<h2>%s</h2>' % title
+        '<br />'
+
+        item_oids = get_tags_database().get_tagged_items(tags)
+        if item_oids:
+            '<TABLE><TR><TD WIDTH="90%">'
+            qon.ui.blocks.tags.tagged_items_table(item_oids, tags)
+            '</TD>'
+            '<TD>'
+
+            # find related tags
+            tags_n_counts = tags_db.get_related_tags_n_counts(tags)
+            related_tags = [tag for tag, count in tags_n_counts]
+            related_link = "../tags/%s," % ",".join(tags)
+            if tags_n_counts and len(item_oids) > 1:
+                'Narrow&nbsp;your&nbsp;results: '
+                qon.ui.blocks.tags.cloud(tags_n_counts,tags_db, related_link, mini_cloud=True)
+            #
+            '</TD></TR></TABLE>'
+
+            if len(tags) > 1:
+                all_tags = tags + related_tags
+            else:
+                # the one current tag would just link back to this page
+                all_tags = related_tags
+
+            if len(all_tags) > 1:
+                links = ['<A HREF="../tags/%s">%s</A>' % (tag,tag) for tag in all_tags]
+                'See everything tagged with: %s <br />' %  ", ".join(links)
+            #
+        else:
+            "Nothing has been tagged with %s yet" % tags_str
+
+        blocks.util.footer()
+
+# ------------------------------------------------------------------------------------------
+
+class ActiveUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Most active')
+        
+    def _q_index [html] (self, request):        
+        _days_cuytoff = 3
+        
+        title = _("ned.com: Most Active Groups")
+        
+        blocks.util.header(request, title)
+        
+        user = get_user()
+
+        '''<h1>%s</h1>
+        <p class="formHelp">''' % _('Most active groups')
+        'Showing all groups active in the last %s days. Listed alphabetically.' % _days_cuytoff
+        '''</p>'''        
+
+        # show statistics for groups that are readable by the user and that have been updated in the last 3 days
+        #  sorted_group_tuples = get_group_database().recently_active_tuples(user, _days_cuytoff)
+        #  blocks.group.list_statistics(sorted_group_tuples)
+
+        blocks.group.format_group_list(get_group_database().recently_active_groups(user, _days_cuytoff))         
+        
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "Most Active"     
+
+# ------------------------------------------------------------------------------------------
+
+class NewUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'New groups')
+        
+    def _q_index [html] (self, request):        
+        title = _('ned.com: New and pending groups')
+
+        db = get_group_database()
+
+        blocks.util.header(request, title)
+
+        '''<h1>%s</h1>
+        <p class="formHelp">''' % _('New and pending groups')
+        _('Displays groups formed and sponsored in the last week, as well as pending groups awaiting a sponsor.')
+        '''</p>
+        <h2>Pending groups</h2>
+        <p class="formHelp">'''
+        _('These groups are awaiting sponsors in order to become active. Click a group name to learn more about it, and to sponsor it if you choose.')
+        '''
+        </p>
+        '''
+        blocks.group.format_group_list(db.mod_queue.pending_items(), owner=1)
+        
+        '''<h2>New Groups</h2>
+        <p class="formHelp">'''
+        _('These groups have become active in the past week.')
+        '''
+        </p>
+        '''
+        blocks.group.format_group_list(db.recent_groups(timedelta(days=7)))   
+        
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "New Groups"
+    
+# ------------------------------------------------------------------------------------------
+
+class AllUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'All Groups')
+        
+    def _q_index [html] (self, request):        
+        title = _('ned.com: All groups')
+        blocks.util.header(request, title)
+        
+        '''<h1>%s</h1>
+        <p class="formHelp">''' % _('All groups')
+        _('Does not include groups still awaiting a sponsor. Listed alphabetically.')
+        '''</p>'''
+
+        db = get_group_database()
+        blocks.group.format_group_list(db.active_groups())   
+        blocks.util.footer()
+            
+    def get_crumb(self):
+        return "All Groups" 
+
+# ------------------------------------------------------------------------------------------
+
+class BrowseUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Browse')
+        
+    def _q_index [html] (self, request):
+
+        title = _("ned.com: Browse Groups")
+        blocks.util.header(request, title)
+
+        # Group browser
+        # -------------
+        recently_active = ''
+        most_active = ''    
+        #sorted_group_tuples = get_group_database().recently_active(get_user(), 3)
+        #recently_active = ', &nbsp;'.join(["&middot;"+qon.ui.blocks.group.display_name(group_tuple[0], karma=False) for group_tuple in sorted_group_tuples[:3]])
+        #sorted_by_activity = qon.util.sort_list(sorted_group_tuples, lambda x: x[1]+x[2])
+        #most_active = ', &nbsp;'.join(["&middot;"+qon.ui.blocks.group.display_name(group_tuple[0], karma=False) for group_tuple in sorted_by_activity[:3]])
+
+        
+        '''
+        <!-- Begin Group Browser -->
+        <h1>Browse groups</h1>
+        <p class="formHelp">Browse groups by category.</p>    
+        %s
+        <!-- <div class="indent homepage-recently-active">
+            Recently active: %s<br />
+            Most active: %s%s        
+        </div> -->
+        <br />
+        <!-- End Group Browser -->
+        ''' % (blocks.group.format_group_browser(showdesc=False), recently_active, most_active, ', &nbsp;<a href="/group/active/">...&nbsp;see more</a>')
+        
+        blocks.util.footer()
+            
+    def get_crumb(self):
+        return " Groups"
+
+
+    
+html_new_group_heading = _('''            
+<p>
+    Create a new group to:
+    <ul>
+        <li>Be a home to your organization or workgroup, or</li>
+        <li>Be a place to collaborate around issues that don't have an appropriate home elsewhere</li>
+    </ul>
+</p>
+<p>
+    Creating a group here is different than what you might be used to.
+    In order for your new group to be accepted, it must be co-sponsored by <strong>four</strong>
+    other members.
+    Co-sponsors must visit your pending group's home page and follow the instructions. It costs
+    five points from a co-sponsor's feedback bank to co-sponsor a group.
+    Your new group will not become active until four more people co-sponsor it.
+    <strong>Please note: if your new group does not receive all co-sponsors within 14 days, it will automatically
+    be deleted.</strong>
+</p>
+
+<p>
+<span class="alert">Creating a new group costs 10 points from your feedback bank.</span>
+If your new group is deleted because it was not fully sponsored within 14 days of creation, the
+10 points will <strong>not</strong> be refunded.
+</p>
+
+<p>
+    When creating a group, you need to select a <cite>short name</cite>, which will become part
+    of your group's web address. This can never be changed, so please choose carefully. For instance,
+    if you select <cite>example</cite> as your group's short name, its web address will be:
+    <cite>http://www.ned.com/group/example/</cite>
+</p>
+''')
+
+html_new_group_commit = _('''
+<p class="info">
+    Your group has been created, and is now awaiting co-sponsors before becoming active.
+</p>
+<p>
+    Remember, in order for your group to become active,
+    <strong>four</strong> members must visit its home page and follow the instructions
+    to co-sponsor the group. Sponsoring a group costs 5 points from the sponsor's
+    feedback bank. Your group's home page is:
+</p>
+<div class="indent">%s</div>
+<p>
+    While you are waiting for your group to become active, you may want to examine its
+    settings. Your group was automatically assigned permissions to promote
+    more collaboration.
+</p>
+<p>
+    To adjust your group settings, go the your group's home page and select <cite>Settings</cite>.
+</p>
+''')

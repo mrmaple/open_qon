@@ -1,0 +1,35 @@
+#!/www/python/bin/python
+
+import sys, os, time, shutil
+
+# DB Directory. Must include a 'bak' directory.
+bindir = '/usr/local/bin'
+dbdir = '/www/var'
+repozodir = '/www/var/repobak'
+
+filename = 'qon.fs'
+destpaths = ['pierre@ginx.com:/www/var/delta.bak/',
+    'pierre@delta2.omidyar.net:/www/var/delta.bak/']
+
+def main_repozo():
+    global bindir, dbdir, repozodir, filename, destpaths
+    
+    os.spawnlp(os.P_WAIT, os.path.join(bindir,'repozo.py'), 'repozo.py',
+        '-BvzQ',
+        '-r',
+        repozodir,
+        '-f',
+        os.path.join(dbdir, filename),
+        )
+
+    for destpath in destpaths:
+        os.spawnlp(os.P_WAIT, os.path.join(bindir, 'rsync'), 'rsync',
+            '-ar',
+            repozodir,
+            destpath,
+            )
+
+
+if __name__ == '__main__':
+    main_repozo()
+

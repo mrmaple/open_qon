@@ -1,0 +1,4 @@
+#!/bin/sh
+# install changes, have them take effect
+# and watch for exceptions
+sudo python setup.py install && sudo /www/bin/hup && tail -f /www/log/qon/error.log

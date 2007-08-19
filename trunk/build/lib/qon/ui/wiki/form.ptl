@@ -1,0 +1,320 @@
+"""
+$Id: form.ptl,v 1.47 2007/04/06 16:57:49 jimc Exp $
+"""
+import os
+from quixote import get_request
+from quixote.form2 import Form, StringWidget, PasswordWidget, TextWidget, \
+    SingleSelectWidget, MultipleSelectWidget, CheckboxWidget, RadiobuttonsWidget
+from qon import api
+from qon.base import get_user
+from qon.util import url_quote_no_slashes
+from qon.ui.form import QonForm
+from qon.wiki import WikiPage, WikiVersion
+from qon.ui import blocks
+
+class NewWikiPageForm(QonForm):
+
+    submit_button = 'submit-newpage'
+    submit_buttons = [submit_button]
+    
+    def __init__(self, group):
+        QonForm.__init__(self)
+        self.group = group
+        self._build_form()
+        
+    def _build_form(self):
+        self.add(StringWidget, '__name', title='Name of new page',
+            hint='Name of new page; try to keep it short.')
+        self.add_submit(self.submit_button, 'Create')
+    
+    def commit(self):
+        get_request().redirect(os.path.join(get_request().get_url(), '..',
+            url_quote_no_slashes(self['__name']), ''))
+            
+
+class EditWikiPage(QonForm):
+
+    allow_title_edit = 0
+
+    submit_button = 'submit-edit'
+    preview_button = 'preview-edit'
+    cancel_button = 'cancel-edit'
+    submit_buttons = [submit_button, preview_button, cancel_button]
+    
+    def __init__(self, group, page, name='', default_text):
+        QonForm.__init__(self)
+        self.group = group
+        self.orig_name = name
+        
+        if page is None:
+            self.page = WikiPage(self.group.wiki, name)
+            self.is_new = True
+            version_count = 0
+        else:
+            self.page = page
+            self.is_new = False
+            version_count = len(self.page.versions)
+            
+        # hack alert: allow title edit for 'index' page
+        if self.page.name == 'index':
+            self.allow_title_edit = 1
+            
+        self.tmp_version = WikiVersion(self.page)
+        self.tmp_version.set_raw(str(default_text))
+        self.tmp_version.title = self.page.versions[-1].title or ''
+        self._build_form(version_count)
+        
+    def _build_form(self, version_count):
+        if self.allow_title_edit:
+            self.add(StringWidget, '__title', title="Page title",
+                value=self.tmp_version.title)
+        self.add(TextWidget, '__raw', title="Edit this text",
+            value=self.tmp_version.get_raw(),
+            rows=25, cols=80,
+            )
+        self.get_widget('__raw').set_value(self.tmp_version.get_raw())
+
+        # show a checkbox that allows the user to lock/unlock the page
+        if self.page.can_lock(get_user()):
+            self.add(CheckboxWidget, 'lock-page', self.page.who_has_lock() is not None, title="Lock page so that only group owners can edit")
+        
+        self.add_hidden('version-count', value=version_count)
+        self.add_submit(self.preview_button, 'Preview')
+        self.add_submit(self.cancel_button, 'Cancel')
+        self.add_submit(self.submit_button, 'Save')        
+
+    def validate (self):
+        if not QonForm.validate(self):
+            return False
+
+        raw = self['__raw']
+        if raw:
+            num_lines = raw.count('\n')
+            # try to keep the blogs to under 2000 lines of text
+            if num_lines > 2000:
+                self.set_error('__raw', 'Sorry, this document contains %i lines. Please relocate some of the content to keep its length under 2000 lines, and try again.' % num_lines)
+
+        return not self.has_errors()
+
+    def preview [html] (self):
+        version = self.tmp_version
+        text = version.raw_to_html(self['__raw'], debug=3)
+
+        text
+        '<hr noshade="noshade" />'
+        self.render()
+        
+    def _redirect(self):
+        get_request().redirect(os.path.join(get_request().get_url(), str('..'), str('..'),
+            self.page.name, str('')))
+        
+    def commit(self):
+        if self.get_submit() == self.cancel_button:
+            return self._redirect()
+            
+        if self.is_new:
+            page = None
+            
+            # set revision title to original page name, before it's munged.
+            title = self.orig_name
+        else:
+            page = self.page
+            title = self.page.versions[-1].title
+        
+        if self.allow_title_edit:
+            title = self['__title']
+        
+        # create new revision if page is empty or user has the right
+        # to edit the page -- UI shouldn't allow user to get here
+        # if can_edit is false
+        if page is None or page.can_edit(get_user()):
+            self.page = api.wiki_edit_page(self.group.wiki,
+                page=page,
+                name=self.page.name,
+                author=get_user(),
+                title=title,
+                raw=self['__raw'])
+
+            # check for edit conflict
+            expected_count = int(self['version-count']) + 1
+            if len(self.page.versions) > expected_count:
+
+                # set default exit code for warning
+                exit_code = 2
+
+                # merge revisions
+                version_count = int(self['version-count'])
+                num_versions = len(self.page.versions)
+
+                if num_versions >= 2:
+                    # must be at least 2 revisions to merge
+
+                    if version_count:
+                        # was not a new page, merge base is the version
+                        # I made my changes off of
+                        base_rev = version_count - 1
+                    else:
+                        # was a new page, merge base is null/empty
+                        base_rev = -1
+
+                    # my version is the latest revision
+                    my_rev = num_versions - 1
+
+                    # revision I clobbered is the one before mine
+                    old_rev = my_rev - 1
+
+                    # merge them
+                    result = self.page.merge_revisions(base_rev, old_rev, my_rev)
+                    if result:
+                        merged = result[0]
+                        exit_code = result[1]
+
+                        # create new revision with merged result
+                        self.page = api.wiki_edit_page(self.group.wiki,
+                            page=self.page,
+                            name=self.page.name,
+                            author=get_user(),
+                            title=title,
+                            raw=merged)
+
+
+        # process the lock-page checkbox
+        user = get_user()
+        if user is not None:
+            if self.page.can_lock(user):
+                if self['lock-page'] == 1:
+                    api.wiki_lock_page(self.page, user)
+                else:
+                    api.wiki_unlock_page(self.page, user)        
+                
+        # check if someone else added a version before ours
+        expected_count = int(self['version-count']) + 1
+        if len(self.page.versions) > expected_count:
+            return get_request().redirect('./warn?q=%d' % exit_code)
+        else:
+            event = ''
+            if self.is_new:
+                event = '?e=newpage'
+            else:
+                event = '?e=editpage'                
+            return get_request().redirect('./' + event)
+            #return self._redirect()
+    
+
+class SnapshotForm(QonForm):
+
+    submit_button = 'submit-snap'
+    cancel_button = 'submit-cancel'
+    submit_buttons = [submit_button, cancel_button]
+
+    def __init__(self, group, wiki):
+        QonForm.__init__(self)
+        self.group = group
+        self.wiki = wiki
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_submit(self.cancel_button, 'Cancel')
+        self.add_submit(self.submit_button, 'Create Snapshot')
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.wiki_create_snapshot(self.group, self.wiki, get_user())
+            return get_request().redirect('../file/')
+        return get_request().redirect('./')
+
+
+class CommentItemForm(QonForm):
+    
+    submit_button = 'submit-newcomment'
+    preview_button = 'preview-newcomment'
+    cancel_button = 'cancel-newcomment'
+    submit_buttons = [submit_button, preview_button, cancel_button]
+
+    def __init__(self, blog, user, page, item=None,):
+        QonForm.__init__(self)
+        self.blog = blog
+        self.user = user
+        self.page = page
+        self.item = item
+        self._build_form()
+
+    def _build_form(self):
+        self.add(TextWidget, 'main', title="Add a comment:",
+            required=False,
+            rows=10, cols=60)
+        self.add(RadiobuttonsWidget, 'karma-item',
+            title="Leave feedback to this page?",
+            options=['positive', 'negative', 'do not leave feedback'],
+            value='do not leave feedback',
+            )
+        self.add_submit(self.cancel_button, 'Cancel')
+        self.add_submit(self.preview_button, 'Preview')
+        self.add_submit(self.submit_button, 'Save')
+        
+
+    def preview [html] (self):
+        '<p>'
+        '<span class="title">Comment:</span><br />%s<br />' % \
+            blocks.blog.format_blog_content(self.blog, self['main'])
+        '</p><hr noshade="noshade" />'
+        self.render()
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            if self.has_key('main') and self['main']:
+                # create placeholder BlogItem if none exists
+                
+                if not self.item:
+                    # get a group owner to own the item
+                    group_owner = self.blog.ihb.get_owners()[0]
+                    self.item = api.blog_new_item(self.blog, group_owner,
+                        'Comments', summary='', no_pay=1)
+                
+                new_comment = api.blog_new_comment(item=self.item, author=self.user,
+                    title='comment',
+                    summary=self['main'],
+                    main='')
+                
+                # new_comment will be None if it's determined to be a duplicate,
+                #  so let's abort
+                if not new_comment:
+                    return get_request().redirect('./')
+                
+            if self.has_key('karma-item'):
+                if self['karma-item'] == 'positive':
+                    api.karma_give_good(self.user, self.page)
+                if self['karma-item'] == 'negative':
+                    api.karma_give_bad(self.user, self.page)                    
+
+        return get_request().redirect('./')
+
+
+class RestoreRevisionForm(QonForm):
+
+    submit_button = 'submit-restore'
+    cancel_button = 'cancel-restore'
+    submit_buttons = [submit_button, cancel_button]
+
+    def __init__(self, group, page, version, author):
+        QonForm.__init__(self)
+        self.group = group
+        self.page = page
+        self.version = version
+        self.author = author
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_submit(self.cancel_button, 'Cancel')
+        self.add_submit(self.submit_button, 'Restore revision')
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.wiki_restore_revision(self.group.get_wiki(),
+                self.page,
+                self.version,
+                self.author,
+                )
+            return get_request().redirect('../../')
+        else:
+            return get_request().redirect('./')

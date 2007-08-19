@@ -1,0 +1,2345 @@
+"""
+$Id: util.ptl,v 1.185 2007/06/20 16:20:50 jimc Exp $
+
+"""
+__pychecker__ = "no-noeffect"
+
+import re, urllib
+
+from quixote import get_request
+from quixote.errors import AccessError
+from datetime import datetime, timedelta
+from quixote.form2 import Form, StringWidget, PasswordWidget
+from quixote.html import href, url_quote
+from dulcinea.ui.util import item_list, li, get_crumbs
+
+from qon.util import url_quote_no_slashes, format_age, format_ago, sort_list, \
+        format_time_remaining, get_page_template, un_camel_case, xml_escape
+from qon.base import get_user, get_user_database, get_group_database, \
+        get_session_manager
+from qon import tzinfo, local
+from qon.ui.util import RedirectError
+import qon.blog
+import qon.group
+import qon.poll
+import qon.user
+import qon.ticket
+import qon.wiki
+import qon.ui.blocks.user
+import qon.ui.blocks.group
+import qon.ui.blocks.blog
+import qon.ui.blocks.wiki
+import qon.api
+
+from qon.ui import messages
+_ = messages.t
+
+_HTTPS_secure_cookie_max_age = timedelta(days=1)
+_HTTPS_password_max_age = timedelta(days=30)
+
+# internal groups -- members of internal groups are forced to use https.
+#  Note: internal and private are separate notions!
+#   * "internal groups" are those that are arbitrarily designated here to be internal 
+#   * "private groups" are those that, via their permission settings in the database,
+#     don't allow non-members any sort of access (not even read)
+#   * it just so happens right now that all internal groups are private, though
+#     the opposite may not be true anymore
+_internal_groups = ['ned-internal', 'sitedev', 'api-admin']
+
+def announcement [html] ():
+    try:
+        # first try to get it from a wiki page that staff can edit
+        htmltext(get_group_database()['sitedev'].get_wiki().pages['sitewide_announcement'].versions[-1].get_raw())
+    except:
+        pass
+
+def person_plural(count):
+    if count == 1:
+        return 'person'
+    else:
+        return 'people'
+
+def full_url(path, scheme=None):
+    """Return a full URL to given internal path. Only valid during HTTPRequest.
+    Returns URL using same scheme as current request. Override by passing
+    'http' or 'https' to scheme.
+    """
+    request = get_request()
+
+    if not scheme:
+        scheme = request.scheme
+    
+    assert (scheme in ['http', 'https'])
+    
+    # handle incoming htmltext
+    if type(path) is not str:
+        path = str(path)
+    
+    if scheme == 'https':
+        return 'https://www.ned.com%s' % urllib.quote(path)
+    else:
+        return 'http://www.ned.com%s' % urllib.quote(path)
+
+    return "%s://%s%s" % (scheme, messages.full_url_host, path)
+        #urllib.quote(path))    
+
+def path_to_obj(obj):
+    """Return a path to certain well-known classes of object."""
+    import qon.ui.poll
+    if isinstance(obj, qon.blog.Blog):
+        return qon.ui.blocks.blog.path_to_blog(obj)
+    elif isinstance(obj, qon.blog.BlogItem):
+        if obj.parent_blogitem:
+            return qon.ui.blocks.blog.path_to_comment(obj.parent_blogitem, obj)
+        else:
+            return qon.ui.blocks.blog.path_to_item(obj)            
+    elif isinstance(obj, qon.wiki.Wiki):
+        return qon.ui.blocks.wiki.path_to_wiki(obj)
+    elif isinstance(obj, qon.wiki.WikiPage):
+        return qon.ui.blocks.wiki.path_to_page(obj)
+    elif isinstance(obj, qon.ticket.TicketTracker):
+        return qon.ui.blocks.group.path_to_tracker(obj)
+    elif isinstance(obj, qon.user.User):
+        return qon.ui.blocks.user.path_to_user(obj)
+    elif isinstance(obj, qon.group.Group):
+        return qon.ui.blocks.group.path_to_group(obj)
+    elif isinstance(obj, qon.poll.PollContainer):
+        return qon.ui.poll.path_to_polls(obj.ihb)
+    elif isinstance(obj, qon.poll.Poll):
+        return qon.ui.poll.path_to_poll(obj)
+    else:
+        return ''
+
+def atom_id(obj):
+    """Return a globally-unique Atom ID."""
+    if isinstance(obj, qon.blog.Blog):
+        path = qon.ui.blocks.blog.path_to_blog(obj)
+        date = format_datetime_utc_ymd(obj.ihb.date)
+    elif isinstance(obj, qon.blog.BlogItem):
+        if obj.parent_blogitem:
+            path = qon.ui.blocks.blog.path_to_comment(obj.parent_blogitem, obj)
+        else:
+            path = qon.ui.blocks.blog.path_to_item(obj)
+        date = format_datetime_utc_ymd(obj.date)
+    elif isinstance(obj, qon.wiki.Wiki):
+        path = qon.ui.blocks.wiki.path_to_wiki(obj)
+        date = format_datetime_utc_ymd(obj.group.date)
+    elif isinstance(obj, qon.wiki.WikiPage):
+        path = qon.ui.blocks.wiki.path_to_page(obj)
+        date = format_datetime_utc_ymd(obj.versions[0].date)
+    elif isinstance(obj, qon.wiki.WikiVersion):
+        path = qon.ui.blocks.wiki.path_to_version(obj)
+        date = format_datetime_utc_ymd(obj.date)
+    elif isinstance(obj, qon.ticket.TicketTracker):
+        path = qon.ui.blocks.group.path_to_tracker(obj)
+        date = format_datetime_utc_ymd(obj.group.date)
+    elif isinstance(obj, qon.user.User):
+        path = qon.ui.blocks.user.path_to_user(obj)
+        date = format_datetime_utc_ymd(obj.get_user_data().member_since())
+    elif isinstance(obj, qon.group.Group):
+        path = qon.ui.blocks.group.path_to_group(obj)
+        date = format_datetime_utc_ymd(obj.date)
+    else:
+        path = ''
+    
+    if path:
+        return "tag:%s,%s:%s" % (messages.short_domain, date, path)
+    else:
+        return None
+
+def convert_url_to_atom_id(url):
+    """Given a URL to an item, return the atom_id for that obj, or None."""
+
+    path = url
+    
+    # advance to the path portion of the url
+    if path.find('//') != -1:
+        path = path[path.find('//')+2:]
+        path = path[path.find('/'):]
+
+    # chop off any query string
+    if path.find('?') != -1:
+        path = path[0:path.find('?')]   
+
+    path = path.lower()        
+
+    obj = _get_obj_from_path(path)
+
+    if obj:
+        return atom_id(obj)
+
+    return None
+
+def _get_obj_from_path(path):
+
+    user_db = get_user_database()
+    group_db = get_group_database()
+
+    if path.startswith('/user/'):
+        user_news_comment_re = re.compile('^/user/(.+)/news/(.+)/(.+)/$')
+        user_news_re = re.compile('^/user/(.+)/news/(.+)/$')
+        user_news_blog_re = re.compile('^/user/(.+)/news/$')
+        user_re = re.compile('^/user/(.+)/$')
+
+        # personal news comment
+        match = user_news_comment_re.match(path)
+        if match:
+            user_id = match.group(1)
+            item_id = int(match.group(2))
+            comment_id = int(match.group(3))
+
+            user = user_db.get_user(user_id)
+            if not user:
+                return None
+            item = user.get_blog().get_item(item_id)
+            if not item:
+                return None
+            comment = item.get_comment(comment_id)
+            return comment
+
+        # personal news item
+        match = user_news_re.match(path)
+        if match:
+            user_id = match.group(1)
+            item_id = int(match.group(2))
+
+            user = user_db.get_user(user_id)
+            if not user:
+                return None
+            item = user.get_blog().get_item(item_id)
+            return item
+
+        # personal news 
+        match = user_news_blog_re.match(path)
+        if match:
+            user_id = match.group(1)
+            user = user_db.get_user(user_id)
+            if not user:
+                return None
+            return user.get_blog()
+
+        # user
+        match = user_re.match(path)
+        if match:
+            user_id = match.group(1)
+            return user_db.get_user(user_id)
+            
+    elif path.startswith('/group/'):
+        news_item_comment_re = re.compile('^/group/(.+)/news/(.+)/(.+)/$')
+        news_item_re = re.compile('^/group/(.+)/news/(.+)/$')
+        news_re = re.compile('^/group/(.+)/news/$')
+        page_rev_re = re.compile('^/group/(.+)/ws/(.+)/(.+)/$')
+        page_re = re.compile('^/group/(.+)/ws/(.+)/$')
+        wiki_re = re.compile('^/group/(.+)/ws/$')
+        group_re = re.compile('^/group/(.+)/$')
+
+        # news item comment
+        match = news_item_comment_re.match(path)
+        if match:
+            group_id = match.group(1)
+            item_id = int(match.group(2))
+            comment_id = int(match.group(3))
+
+            group = group_db.get_group(group_id)
+            if not group:
+                return None
+            item = group.get_blog().get_item(item_id)
+            if not item:
+                return None
+            return item.get_comment(comment_id)
+
+        # news item
+        match = news_item_re.match(path)
+        if match:
+            group_id = match.group(1)
+            item_id = int(match.group(2))
+            group = group_db.get_group(group_id)
+            if not group:
+                return None
+            return group.get_blog().get_item(item_id)
+
+        # news 
+        match = news_re.match(path)
+        if match:
+            group_id = match.group(1)
+            group = group_db.get_group(group_id)
+            if not group:
+                return None
+            return group.get_blog()
+
+        # page revision
+        match = page_rev_re.match(path)
+        if match:
+            group_id = match.group(1)
+            page_id = match.group(2)
+            page_id = qon.wiki.clean_page_name(page_id)
+            rev_id = int(match.group(3))
+
+            group = group_db.get_group(group_id)
+            if not group:
+                return None
+            page = group.get_wiki().get_page(page_id)
+            if not page:
+                return None
+            return page.get_revision(rev_id)
+
+        # page
+        match = page_re.match(path)
+        if match:
+            group_id = match.group(1)
+            page_id = match.group(2)
+            page_id = qon.wiki.clean_page_name(page_id)            
+            group = group_db.get_group(group_id)
+            if not group:
+                return None
+            return group.get_wiki().get_page(page_id)
+
+        # wiki
+        match = wiki_re.match(path)
+        if match:
+            group_id = match.group(1)
+            group = group_db.get_group(group_id)
+            if not group:
+                return None
+            return group.get_wiki()
+
+        # group
+        match = group_re.match(path)
+        if match:
+            group_id = match.group(1)
+            return group_db.get_group(group_id)
+
+def lookup_atom_id(atom_id):
+    """Given an atom id, return the obj it refers to, or None."""
+
+    atom_re = re.compile('^tag:.+:(.+)$')
+
+    match = atom_re.match(atom_id)
+    if match:
+        path = match.group(1)
+
+        if not path:
+            return None
+
+        return _get_obj_from_path(path)
+
+    return None
+            
+def display_name [html] (obj, karma=1, bank=0):
+    """Display name dispatcher for Users, Groups, and WikiPages."""
+    if isinstance(obj, qon.user.User):
+        return qon.ui.blocks.user.display_name(obj, karma=karma, bank=bank)
+    
+    elif isinstance(obj, qon.group.Group):
+        return qon.ui.blocks.group.display_name(obj, karma=karma)
+    
+    elif isinstance(obj, qon.wiki.WikiPage):
+        return qon.ui.blocks.wiki.display_name(obj, karma=karma)
+        
+    else:
+        return "*no name*"
+        
+def display_name_plain [html] (obj):
+    """Display name dispatcher for Users, Groups, and WikiPages."""
+    if isinstance(obj, qon.user.User):
+        return qon.ui.blocks.user.display_name_plain(obj)
+    
+    elif isinstance(obj, qon.group.Group):
+        return qon.ui.blocks.group.display_name_plain(obj)
+    
+    elif isinstance(obj, qon.wiki.WikiPage):
+        return qon.ui.blocks.wiki.display_name_plain(obj)
+        
+    else:
+        return "*no name*"
+
+def formatted_display_name_plain (obj):
+    """Return title of page for BlogItems, Polls, WikiPages, Users and Groups."""
+    obj_title = "no title"
+    if isinstance(obj, qon.blog.BlogItem):
+        if obj.parent_blogitem:
+            obj_title = "Comment on " + obj.parent_blogitem.title
+        else:
+            obj_title = obj.title        
+    elif isinstance(obj, qon.poll.Poll):
+        obj_title = obj.title
+    elif isinstance(obj, qon.wiki.WikiPage):
+        obj_title = obj.versions[-1].title
+    elif isinstance(obj, qon.user.User):
+        obj_title = "Profile of " + obj.display_name()
+    elif isinstance(obj, qon.group.Group):
+        obj_title = obj.display_name()        
+    obj_title = format_string(obj_title)        
+    return obj_title
+                
+def format_string(s, max_len=40, no_nl=0):
+    """Truncate a string. Expects a utf-8 encoded string and returns a utf-8 encoded string."""
+
+    if s is None:
+        return ''
+    
+    if type(s) is not unicode:
+        s = str(s).decode('utf-8', 'replace')
+        
+    if max_len > 5:
+        if len(s) > max_len:
+            s = s[:max_len-3] + '...'
+    if no_nl:
+        s = s.replace('\n', '  ')
+
+    return s.encode('utf-8')
+
+def datetime_utc_to_local(dt):
+    utcdt = dt.replace(tzinfo=tzinfo.utc)
+    return utcdt.astimezone(tzinfo.Pacific)
+
+def datetime_local_name(dt):
+    return tzinfo.Pacific.tzname(dt)
+    
+def format_datetime(datetime_obj):
+    if datetime_obj is None:
+        return ''
+        
+    local = datetime_utc_to_local(datetime_obj)
+    return local.strftime("%a, %d %b %Y %H:%M:%S ") + \
+        datetime_local_name(local)
+        
+def format_datetime_local_iso(dt, microseconds=False):
+    """Convert datetime to local and return ISO 8601 format."""
+    ldt = datetime_utc_to_local(dt)
+    if not microseconds:
+        ldt = ldt.replace(microsecond=0)
+    
+    return ldt.isoformat()
+
+def format_datetime_short(datetime_obj):
+    """Convert datetime to local and return format like 1 Jan 2004 14:25 PDT"""
+    if datetime_obj is None:
+        return ''
+    local = datetime_utc_to_local(datetime_obj)
+    return local.strftime("%d %b %Y %H:%M ") + \
+        datetime_local_name(local)
+    
+def format_datetime_shorter(datetime_obj):
+    """Convert datetime to local and return format like 1 Jan 2004"""
+    if datetime_obj is None:
+        return ''
+    local = datetime_utc_to_local(datetime_obj)
+    return local.strftime("%d %b %Y")
+    
+def format_datetime_utc_ymd(datetime_obj):
+    """Return YYYY-MM-DD"""
+    return datetime_obj.strftime("%Y-%m-%d")
+
+def format_time_left(dt, now=None, prefix='in ', detail=False):
+    return '%s%s' % (prefix, format_time_remaining(dt, now=now, detail=detail))
+
+def format_portlet_content [html] (items):
+
+    odd = True
+    for i in items:
+        if odd:
+            style = 'portletContent tighter odd'
+        else:
+            style = 'portletContent tighter even'
+            
+        odd = not odd
+        
+        '''<div class="%(style)s">%(item)s
+        </div>
+        ''' % dict(
+            style=style,
+            item=i,
+            )
+
+
+def format_table [html] (cols, cells, headings=[], table_class='user-listing', centered_columns=[]):
+
+    if not cells and not headings:
+        return ''
+        
+    '''
+    <div class="%s">
+    ''' % table_class
+    
+    '''<table id="sortable" class="listing" summary="" cellpadding="0" cellspacing="0">
+    '''
+    
+    if headings:
+        col_index = 0
+        '''<thead>'''
+        
+        for cell in headings:
+            if col_index == 0:
+                '<tr>'
+            '<th class="nosort">'
+            cell
+            '</th>'
+            col_index += 1
+            if col_index >= cols:
+                '</tr>'
+                col_index = 0
+                
+        if col_index != 0:
+            '</tr>'
+            col_index = 0
+        '''</thead>'''
+    
+    col_index = 0
+    odd = True
+    
+    '''<tbody>'''
+    
+    for cell in cells:
+        if col_index == 0:
+            if odd:
+                '<tr class="odd">'
+            else:
+                '<tr class="even">'
+            odd = not odd
+        if col_index in centered_columns:
+            '<td style="{text-align: center;}">'
+        else:
+            '<td>'
+        cell
+        '</td>'
+        col_index += 1
+        if col_index >= cols:
+            '</tr>'
+            col_index = 0
+            
+    if col_index != 0:
+        '</tr>'
+        col_index = 0
+    '''
+    </tbody>
+    </table>
+    </div>
+    '''
+
+def format_table_rows [html] (cells, headings=[], table_class='user-listing'):
+    # Format a table of rows, where cells is a list of tuples, one per row.
+    # Headings is a list of cells
+    
+    if not cells and not headings:
+        return ''
+    
+    '''
+    <div class="%s">
+    ''' % table_class
+    
+    '''<table id="sortable" class="listing" summary="" cellpadding="0" cellspacing="0">
+    '''
+    
+    if headings:
+        col_index = 0
+        '''<thead>'''
+        
+        '<tr>'
+        for cell in headings:
+            '<th class="nosort">'
+            cell
+            '</th>'
+        '</tr>'
+                
+        '''</thead>'''
+    
+    col_index = 0
+    odd = True
+    
+    '''<tbody>'''
+    
+    for row in cells:
+        if odd:
+            '<tr class="odd">'
+        else:
+            '<tr class="even">'
+        odd = not odd
+
+        for cell in row:
+            '<td>'
+            cell
+            '</td>'
+        '</tr>'
+    '''
+    </tbody>
+    </table>
+    </div>
+    '''
+
+def format_crumbs(delim=None):
+    if delim is None:
+        delim = ' &gt; '
+    
+    crumbs = []
+    for path, link_title in get_crumbs():
+        crumbs.append(href(path, link_title))
+        
+    return htmltext(delim.join(crumbs))
+    
+def _select_tab(tabs, selected_tab):
+    if selected_tab:
+        for t in tabs:
+            if selected_tab.lower() == t['name'].lower():
+                t['class'] = 'selected'
+
+def _global_tabs [html] (request):
+    
+    tabs = [
+        {   'name': 'Home',
+            'lname': 'home',
+            'path': '/home/',
+            'accesskey': 'h',
+            'class': 'plain',
+        },
+        
+        {   'name': 'Groups',
+            'lname': 'groups',
+            'path': '/group/',
+            'class': 'plain',
+        },        
+
+        {   'name': 'People',
+            'lname': 'people',
+            'path': '/user/',
+            'class': 'plain',
+        },
+
+        {   'name': "What's New",
+            'lname': 'whatsnew',
+            'path': '/whatsnew/',
+            'accesskey': 'n',
+            'class': 'plain',
+        },
+
+        {   'name': "Popular",
+            'lname': 'whatshot',
+            'path': '/whatshot/',
+            'accesskey': 't',
+            'class': 'plain',
+        },        
+        ]
+        
+    if get_user():
+        tabs.insert(1,
+            {   'name': 'My ned.com',
+                'lname': 'mynednet',
+                'path': '/my/',
+                'accesskey': 'm',
+                'class': 'plain',
+            })                
+
+    
+    _select_tab(tabs, getattr(request, str('qon_global_mode'), ''))
+
+    '''
+    <h5 class="hiddenStructure">Sections</h5> 
+    <ul id="portal-globalnav">
+    '''
+    
+    for t in tabs:
+        if t.has_key('accesskey'):
+            '''
+            <li id="portaltab-%(lname)s" class="%(class)s">
+                <a href="%(path)s" class="" accesskey="%(accesskey)s"> %(name)s </a>
+            </li>
+            ''' % {
+                'lname': t['lname'],
+                'class': t['class'],
+                'path': t['path'],
+                'accesskey': t['accesskey'],
+                'name': t['name'],
+                }
+        else:
+            '''
+            <li id="portaltab-%(lname)s" class="%(class)s">
+                <a href="%(path)s" class=""> %(name)s </a>
+            </li>
+            ''' % {
+                'lname': t['lname'],
+                'class': t['class'],
+                'path': t['path'],
+                'name': t['name'],
+                }
+
+    '''
+    </ul>
+    '''
+
+def section_tabs [html] (request, tabs, selected_tab=''):
+    _select_tab(tabs, selected_tab)
+    '''
+    <h5 class="hiddenStructure">Subsections</h5> 
+    <ul class="contentViews">
+    '''
+    
+    for t in tabs:
+        '''
+        <li id="contentview-%(lname)s" class="%(class)s">
+            <a href="%(path)s" class="" accesskey="%(accesskey)s"> %(name)s </a>
+        </li>
+        ''' % {
+            'lname': t['name'].lower(),
+            'class': t['class'],
+            'path': t['path'],
+            'accesskey': t['accesskey'],
+            'name': t['name'],
+            }
+    '''
+    </ul>
+    '''
+
+def _group_tabs [html] (request):
+    
+    group = getattr(request, str('qon_group'), None)
+    selected_tab = getattr(request, str('qon_group_mode'), str(''))
+    
+    if not group:
+        return ''
+    
+    group_path = path_to_obj(group)
+
+    tabs = (
+        {
+            'name': 'Home',
+            'path': group_path,
+            'accesskey': 'h',
+            'class': 'plain',
+        },
+
+        {
+            'name': 'Discussions',
+            'path': group_path + 'news/',
+            'accesskey': 'd',
+            'class': 'plain',
+        },
+
+        {
+            'name': 'Workspace',
+            'path': group_path + 'ws/',
+            'accesskey': 'w',
+            'class': 'plain',
+        },
+
+        {
+            'name': "Popular",
+            'path': group_path + 'whats_hot/',
+            'accesskey': 't',
+            'class': 'plain',
+        },
+
+        {
+            'name': 'Polls',
+            'path': group_path + 'poll/',
+            'accesskey': 'p',
+            'class': 'plain',
+        },
+
+        {
+            'name': 'Files',
+            'path': group_path + 'file/',
+            'accesskey': 'f',
+            'class': 'plain',
+        },
+        )
+        
+    section_tabs(request, tabs, selected_tab)
+    
+def _personal_tools [html] (request):
+    user = get_user()
+    '''
+    <h5 class="hiddenStructure">Personal tools</h5> 
+    <ul id="portal-personaltools">
+    '''
+    
+    if user is not None:
+        user_id = user.get_user_id()
+        
+        mail = user.new_messages()
+        if mail:
+            inbox = '<strong>' + _('Inbox') + ' ' + _('(%s)') % len(mail) + '</strong>'
+        else:
+            inbox = _('Inbox')
+        
+        '''<li class="portalUser">%s</li>''' % display_name(user, bank=1)
+        
+        '''<li>%s</li>''' % \
+            href(qon.ui.blocks.user.path_to_user(user) + 'msg/', inbox,
+                title=_('List of messages sent to you by other members'))
+
+        '''<li>%s</li>''' % \
+            href('/user/%s/private/' % user_id, _('Settings'),
+                title=_('Change profile, password, email address'))
+
+        '''<li>%s</li>''' % \
+            href('/user/signout', _('Sign out'),
+                title=_('Sign out'))
+        
+    else:
+        '''<li class="portalNotLoggedIn">You are not signed in.</li>'''
+
+    if 0:
+        '''
+        <li>
+        Today is %s.
+        </li>
+        ''' % datetime_utc_to_local(datetime.utcnow()).strftime(str("%A, %B %d, %Y"))
+
+    '''
+    </ul>
+    '''
+
+def _breadcrumbs [html] (request):
+    '''
+    <div id="portal-breadcrumbs">
+    '''
+    _('You are here:')
+    ' '
+    format_crumbs(' &gt; ')
+    item = getattr(request, str('qon_emailable_item'), None)
+    if item and get_user():
+        email_text = href('email', 'email this page', title="Email this page.")
+        '''
+        <span class="email_this_page"><img src="/images/mail_icon.gif" alt="email this page" title="email this page" height="16" width="16" /> %s</span>
+        ''' % email_text  
+
+def _is_disabled(menu_item):
+    return menu_item.get('disabled', False)
+
+def _is_selected(menu_item):
+    return menu_item.get('selected', False)
+    
+def _get_title(menu_item):
+    return menu_item.get('title', '')
+    
+def _format_singular_item(menu_item):
+    css_class = 'actionSingular'
+    if _is_disabled(menu_item):
+        css_class += ' disabled'
+    if _is_selected(menu_item):
+        css_class += ' selected'
+        
+    if not _is_disabled(menu_item):
+        item = href(menu_item['path'], menu_item['name'], title=_get_title(menu_item))
+    else:
+        item = menu_item['name']
+    
+    return htmltext('''<li class="%(css)s">%(item)s</li>''' % { 'css': css_class,
+        'item': item,
+        })
+
+def _format_drop_down_menu_items(menu_item):
+    s = ''
+    for i in menu_item['items']:
+        if _is_disabled(i):
+            s += '''<li><a name="%(name)s"><span class="disabled">%(name)s</span></a></li>''' % { 'name': i['name'] }
+        else:
+            s += '''
+                <li>
+                    <a href="%(path)s" onmouseup="if (activeButton != null) resetButton(activeButton);">%(name)s</a> 
+                </li>
+            ''' % {
+                'path': i['path'],
+                'name': i['name'],
+                }
+    return htmltext(s)
+        
+def _format_drop_down_menu(menu_item):
+    if _is_disabled(menu_item):
+        disabled = ' class="disabled"'
+        href = '''<a name="#">'''
+    else:
+        disabled = ''
+        href = '''<a href="#" onclick="return buttonClick(event, '%(id)s');" onmouseover="buttonMouseover(event, '%(id)s');">''' % \
+            dict(id=menu_item['name'])
+        
+    return htmltext('''
+    <li>
+        <div class="menuPosition">
+            <ul class="actionMenu" id="%(id)s" onmouseover="menuMouseover(event)">
+                %(items)s
+            </ul>
+            %(href)s <span%(disabled)s>%(name)s</span> </a>
+        </div>
+    </li>
+    ''' % {
+        'href': href,
+        'id': menu_item['name'],
+        'name': menu_item['name'],
+        'items': _format_drop_down_menu_items(menu_item),
+        'disabled': disabled,
+        })
+
+def generate_menus [html] (request):
+    if not hasattr(request, str('qon_menus')):
+        return ''
+        
+    menus = request.qon_menus
+    if not menus:
+        return ''
+    menus.reverse()
+    
+    '''<div class="contentActions">
+    <h5 class="hiddenStructure">Actions</h5>
+    <ul>
+    '''
+    
+    for i in menus:
+        if i.has_key(str('items')):
+            _format_drop_down_menu(i)
+        else:
+            _format_singular_item(i)
+    
+    '''</ul>
+    </div>
+    '''
+    
+    # free menus because we might have copied a few substructures
+    del request.qon_menus
+    request.qon_menus = None
+    
+def set_global_mode(request, mode):
+    request.qon_global_mode = mode
+    
+def set_section_tabs(request, func):
+    request.qon_section_tabs = func
+
+def set_section_mode(request, mode):
+    request.qon_section_mode = mode
+    
+def set_group_mode(request, group, group_mode):
+    """Set group user is currently browsing. Used by menu system."""
+    request.qon_group = group
+    request.qon_group_mode = group_mode
+    
+def set_menus(request, menus):
+    """Set the current mode menus. Must copy dicts."""
+    import copy
+    request.qon_menus = copy.deepcopy(menus)
+    
+def get_menus(request):
+    """Return the current mode menus. Handle with care!!"""
+    return request.qon_menus
+
+def set_menu_mode(request, mode):
+    def check_mode(i):
+        if i.get('path', '') == mode:
+            i['selected'] = True
+        
+    traverse_menus(request, check_mode)
+    
+def traverse_menus(request, func):
+    """Traverse qon_menus and perform func on each item."""
+    menus = getattr(request, 'qon_menus', None)
+    if menus:
+        for item in menus:
+            if item.has_key('items'):
+                for subitem in item['items']:
+                    func(subitem)
+            func(item)
+    
+def prefix_menu_paths(request, prefix='../'):
+    """Add prefix to beginning of every relative path in qon_menus."""
+    
+    def adjust_path(i):
+        path = i.get('path', '')
+        if not path.startswith('/') and not path.startswith('http'):
+            i['path'] = prefix + path
+        
+    traverse_menus(request, adjust_path)
+    
+
+_mini_style = '''
+<style type="text/css"><!--
+p.title,
+span.title { font-weight: bold; }
+span.readtitle { font-weight: normal; }
+p.subtitle,
+span.subtitle	{ font-size: 0.9em; }
+
+.pagenavigation {
+    text-align: right;
+    float: right;
+    font-size: 50%;
+    margin-left: 1em;
+}
+
+.pagenumbers {
+    font-size: 150%;
+}
+.search_document_age,
+.search_document_age_alert,
+.discreet
+{ font-size: 85%; font-weight: normal; }
+.preview { font-size: 90%; }
+
+h1 { font-size: 160%; }
+h2 { font-size: 150%; }
+h3 { font-size: 140%; font-weight: bold; }
+h4 { font-size: 120%; font-weight: bold; }
+h5 { font-size: 100%; font-weight: bold; }
+h6 { font-size: 85%; font-weight: bold; }
+
+.hiddenStructure { display: none; }
+#portal-globalnav li,
+#portal-personaltools li,
+.contentViews li,
+.contentActions li,
+.actionMenu li
+{
+    display: inline;
+    list-style: none;
+    padding-right: 1em;
+}
+td.widgetHeader { vertical-align: top; }
+
+--></style>
+'''
+
+def stylesheet_header [html] (request):
+    # Basic crude style for Netscape4.x - This can be removed if you
+    # don't want the special NS4 look - it will still work, just be plain
+    # text instead. Column layout for Netscape4.x included
+    
+    # no style sheets for quick style
+    if request.get_cookie('quick'):
+        # no style sheet, but embed minimal styles here
+        return htmltext(_mini_style)
+    
+    '''
+    <link rel="Stylesheet" type="text/css" href="%s" /> 
+    ''' % full_url('/scss/ploneNS4.css')
+    
+    # Column style sheet
+    '''
+    <style type="text/css" media="all">@import url(%s);</style> 
+    ''' % full_url('/scss/ploneColumns.css')
+    
+    # Main style sheets for CSS2 capable browsers
+    '''<style type="text/css" media="screen"> @import url(%s);</style> 
+    ''' % full_url('/scss/plone.css')
+
+
+    # Alternate style sheets for the bigger/smaller text switcher
+    '''
+    <link rel="alternate stylesheet" type="text/css" media="screen" href="%s" title="Small Text" />
+    <link rel="alternate stylesheet" type="text/css" media="screen" href="%s" title="Large Text" />
+    ''' % (full_url('/scss/ploneTextSmall.css'), full_url('/scss/ploneTextLarge.css'))
+
+    # Custom style sheet if available
+    '''
+    <style type="text/css" media="screen">@import url(%s);</style> 
+    ''' % full_url('/scss/ploneCustom.css')
+    
+    if inside_internal_group(request) or inside_private_group(request):
+        '''
+        <style type="text/css" media="screen">@import url(%s);</style> 
+        ''' % full_url('/scss/ploneCustom_internal_colors.css')
+    
+    
+    # Style sheet used for printing
+    '''
+    <link rel="stylesheet" type="text/css" media="print" href="%s" />
+    ''' % full_url('/scss/plonePrint.css')
+    '''
+    <link rel="stylesheet" type="text/css" media="print" href="%s" />
+    ''' % full_url('/scss/rstPrint.css')
+    
+    # Style sheet used for presentations (Opera is the only browser supporting this at the moment)
+    '''
+    <link rel="stylesheet" type="text/css" media="projection" href="%s" />
+    ''' % full_url('/scss/plonePresentation.css')
+
+    '''
+    <!-- Internet Explorer CSS Fixes -->
+    <!--[if IE]>
+        <style type="text/css" media="all">@import url(%s);</style>
+        <![endif]-->
+    ''' % full_url('/scss/ploneIEFixes.css')
+    
+def common_header [html] (request, title='', css_url=None, rss_url=None, other_header=''):
+    
+    # set utf-8 charset
+    request.response.set_header(str('content-type'), str('text/html; charset=utf-8'))
+    
+    '''
+    <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    <html><head>
+    '''
+    if other_header:
+        htmltext(other_header)
+
+    if rss_url:
+        '<link rel="alternate" type="application/rss+xml" title="RSS" '
+        'href="%s" />' % rss_url
+    
+    
+    stylesheet_header(request)
+    
+    if 0:
+        '''
+        <link rel="shortcut icon" href="http://plone.org/favicon.ico" type="image/x-icon" />
+        <link rel="search" href="http://plone.org/search_form" title="Search this site" />
+        <link rel="up" href="#" title="Up one level" />
+        <link rel="copyright" href="copyright" title="Copyright information" />
+        <link rel="author" href="author" title="Author information" />
+        '''
+        
+    # Disable IE6 image toolbar -->
+    '''
+    <meta http-equiv="imagetoolbar" content="no" />
+    '''
+
+    '''
+    <script type="text/javascript" charset="utf-8" src="%s"> </script>
+    ''' % (full_url('/js/MochiKit.js'))
+
+    '''
+    <script type="text/javascript" charset="utf-8" src="%s"> </script>
+    ''' % (full_url('/js/qon_tagging.js'))
+
+    if not request.get_cookie('quick'):
+        # Define dynamic server-side variables for javascripts in this one
+        '''
+        <script type="text/javascript" src="%s"> </script>
+        ''' % (full_url('/js/plone_javascripts.js'))
+    
+        
+        if css_url:
+            '<link rel="stylesheet" type="text/css" href="%s" />' % css_url
+
+    '<title>%s</title>' % title
+
+    # frame buster
+    '<script>if (parent.frames.length > 0) parent.location.href = self.document.location</script>'
+        
+    '</head>'
+
+
+
+def searchbox [html] (request, divid="portal-searchbox"):
+    q = request.get_form_var('SearchableText')
+    qs_keywords = ''
+    if not q:
+        q = 'start new search'
+    else:
+        qs_keywords = '?SearchableText=%s' % htmltext(q)
+
+    '''   
+    <div id="%s">
+        <form name="searchform" style="position: relative; top: -0.6em;" action="/search/">
+            <label for="searchGadget" class="hiddenStructure">Search</label>
+            <input onClick="if (this.value == 'start new search') this.value = ''" id="searchGadget" name="SearchableText" value="%s" type="text" size="25" alt="Search" style="font-family: Verdana; font-size: 110%%; margin-bottom: 3px; margin-right: 0; padding: 3px;" title="Search" accesskey="s" class="visibility:visible;" tabindex="30001" />
+            <input class="searchButton" type="submit" value="Search" accesskey="s" tabindex="30002" /> 
+    ''' % (divid, q)
+
+    '''
+        </form>
+        %s
+    </div>
+    ''' % href('/search/advanced/%s' % qs_keywords, 'advanced search') 
+
+redirect_destination_paths = ['/user/newpass', '/user/signout', '/home/agree']
+
+def detect_redirect_cycle (request):
+    if hasattr(request, 'qon_suppress_ua_check'):
+        return True
+
+    # redirect to change password page, unless we're already there
+    if request.get_path() in redirect_destination_paths:
+        return True
+
+    # if they're in the middle of changing their password:
+    if request.get_path().endswith('private/chpass'):
+        return True
+
+    return False
+
+def _check_user_agreement(request, user):
+    if detect_redirect_cycle(request):
+        return None
+
+    if user:
+        if not user.user_agreement_accepted():
+            return request.redirect(full_url('/home/agree'))
+        
+    return None
+    
+def _check_user_disabled(request, user):
+    if detect_redirect_cycle(request):
+        return None
+
+    if user and user.is_disabled():
+        return request.redirect(full_url('/user/signout'))
+    return None
+
+def _check_canonical_name(request):
+    from qon.util import get_canonical_name
+
+    server_name = request.get_server().split(':')[0]
+    server_name = get_canonical_name(server_name)
+    if not server_name:
+        # already canonical
+        return None
+    
+    return request.redirect("%s://%s%s" % (request.scheme, server_name,
+        urllib.quote(request.get_path())), permanent=1)
+
+def inside_private_group(request):
+    """Return true if we're inside a private group."""
+    path = request.get_path().lower()
+    group_re = re.compile('^/group/([^/]+)/')
+    match = group_re.match(path)
+    group = None
+    if match:
+        group_id = match.group(1)
+        group = get_group_database().get_group(group_id)
+    if not group:
+        return False    
+    return group.is_private()
+
+def inside_internal_group(request):
+    """Return true if we're inside an internal group."""
+    path = request.get_path().lower()    
+    for gid in _internal_groups:
+        s = '/group/%s/' % gid
+        if path.startswith(s):
+            return True
+    return False
+    
+def is_internal_group(group):
+    """Return True if group is considered internal."""
+    global _internal_groups
+    return group.get_user_id() in _internal_groups
+
+
+def is_internal_user(user):
+    """Return True if user is an internal, privileged user. This is determined
+    by user's ability to *read* any of a defined list of internal groups.
+    """
+    global _internal_groups
+    group_db = get_group_database()
+    for group_id in _internal_groups:
+        group = group_db.get_group(group_id)
+        if group and group.can_read(user):
+            return True
+    return False
+
+def is_internal_item(obj):
+    """Return whether or not given object belongs to an internal group.
+    Should only be used for BlogItem, Poll, and WikiPage"""
+    if isinstance(obj, qon.blog.BlogItem):
+        ihb = obj.blog.ihb
+        if isinstance(ihb, qon.user.User):
+            return False
+        elif isinstance(ihb, qon.group.Group):
+            return is_internal_group(ihb)
+    elif isinstance(obj, qon.poll.Poll):
+        return is_internal_group(obj.container.ihb)
+    elif isinstance(obj, qon.wiki.WikiPage):
+        return is_internal_group(obj.wiki.group)
+    return False    
+
+def inval_all_user_sessions(user):
+    smgr = get_session_manager()
+    sessions = smgr.get_user_sessions(user)
+    for s in sessions:
+        smgr.delete_session(s.id)
+    
+    # remove from who's online
+    get_user_database().hit_db.clear_hits(user)
+
+def inval_all_user_cookies(request):
+    # get rid of session cookie and the session it points to
+    get_session_manager().expire_session(request)
+
+    # remove footprints
+    request.response.expire_cookie('footprints', path='/')
+    
+    # remove aux1
+    request.response.expire_cookie('aux1', path='/')
+    
+
+def check_internal_user(request, user, no_cookie_check=False):
+    """Ensure internal users pass only through https and are authenticated.
+    
+    If no_cookie_check is True, don't check for additional authentication
+    cookie. This may be useful for Atom feeds, for example.
+    """
+    
+    # if the server we're running on does not support https, like a dev
+    # machine, we abort this test. this is a bit of a problem, because
+    # an error in configuration might allow an internal user to proceed
+    # using a standard http session
+    
+    if not has_https():
+        return None
+    
+    if is_internal_user(user):
+        # ensure user has an expiring password - this is to catch users
+        # who have just joined an internal group
+        if not user.expiring_password():
+            user.set_expiring_password(True)
+    
+        # are we https?
+        if not local.HTTPS_LOGIN or request.scheme == 'https':
+
+            if no_cookie_check:
+                cookie_user = None
+            else:
+                # is authenticated cookie available?
+                cookie_user = get_secure_user_cookie(request)
+            
+            # we're good
+            if no_cookie_check or (cookie_user is user):
+                # has password expired?
+                if user.password_expired(_HTTPS_password_max_age):
+                    if not detect_redirect_cycle(request):
+                        chpass_path = qon.ui.blocks.user.path_to_user(user) + 'private/chpass'
+                        raise RedirectError(url=full_url(chpass_path))
+
+                # otherwise, we're good to go
+                return None
+            else:
+                # did not authenticate
+                # we used to invalidate session here, but we don't want to do that
+                # in case an rss aggregator is trying to access a page: we want
+                # to prohibit access, but allow the user's other session (e.g. in
+                # their browser) to persist.
+                # 
+                # instead, prohibit access to anything except signing out.
+
+                url = request.get_url()
+                if not url.endswith('/signout'):
+                    raise AccessError, \
+                        '''
+                        <p class="alert">Could not authenticate user.</p>
+                        <p>To continue using this browser,you must
+                        <a href="/user/signout">sign out</a>
+                        and start again.</p>
+                        '''
+                #inval_all_user_sessions(user)
+                #inval_all_user_cookies(request)
+                #raise RedirectError(url=request.get_url())
+        else:
+            # internal user via http
+            # redirect to https
+            if local.HTTPS_LOGIN:
+                path = request.get_path()
+
+                # get_path() looses the URL parameters after the ?
+                params = str("&").join([str("%s=%s") % (field,value) for field,value in request.formiter()])
+                if params:
+                    path = str(str("%s?%s") % (path, params))
+
+                raise RedirectError(url=full_url(path, 'https'))
+    else:
+        # non-internal user, ensure we are *not* https
+        # careful: internal users *do* get some https pages, like /private/chpass
+        pass
+    
+    return None
+
+def header [html] (request, title=None, suppress_login=0,
+                   rss_url=None, css_url=None, other_header='', group_name_append=''):
+    
+    # ensure access is through www.ned.com
+    redir = _check_canonical_name(request)
+    if redir:
+        return redir
+
+    user = get_user()
+
+    if user is not None:
+        user.record_ip_access(request.get_environ('REMOTE_ADDR'))
+        if not redir:
+            redir = _check_user_agreement(request, user)
+        if not redir:
+            redir = _check_user_disabled(request, user)
+        if redir:
+            return redir
+
+        user.user_hit()
+        
+    common_header(request, title, css_url, rss_url, other_header=other_header)
+    
+    s = '''
+        <body>
+        <a name="top"> </a>
+        <div id="visual-portal-wrapper">
+        <div id="portal-top">
+        <a class="hiddenStructure" href="%(documentContent)s">Skip to content</a>
+        <h1 id="portal-logo"> <a href="/">%(site_title)s</a></h1>
+        '''
+        
+    if not request.get_cookie('quick'):
+        s += '''
+        <div id="portal-siteactions">
+            <a href="javascript:setActiveStyleSheet('Small Text', 1);" style="background: url(%(textsize_small)s)" title="Small Text"></a>
+            <a href="javascript:setActiveStyleSheet('', 1);" style="background: url(%(textsize_normal)s)" title="Normal Text"></a>
+            <a href="javascript:setActiveStyleSheet('Large Text', 1);" style="background: url(%(textsize_large)s)" title="Large Text"></a> 
+        </div>
+        '''
+        
+    s % dict(
+        documentContent=request.get_url() + '#documentContent',
+        site_title=_(messages.site_title),
+        textsize_small=full_url('/images/textsize_small.gif'),
+        textsize_normal=full_url('/images/textsize_normal.gif'),
+        textsize_large=full_url('/images/textsize_large.gif'),
+        )
+
+    searchbox(request)
+    
+    _global_tabs(request)
+    _personal_tools(request)
+    _breadcrumbs(request)
+    
+    '''
+    </div>
+    ''' # portal-top
+    
+    '''
+
+    
+    <table id="portal-columns">
+    <tbody>
+    <tr>
+    <td id="portal-column-one">
+    <div class="visualPadding">
+    '''
+    left_margin(request, suppress_login)
+    '''
+    </div>
+    </td>
+    <td id="portal-column-content">
+    '''
+
+    announcement()
+    
+    group = getattr(request, str('qon_group'), None)
+    section_tabs = getattr(request, str('qon_section_tabs'), None)
+    if group or section_tabs:
+        '''
+        <div id="content" class="documentEditable">
+        '''
+    if group:
+        '''
+        <h1 class="group-name">%s</h1>
+        ''' % (display_name_plain(group) + group_name_append)
+        _group_tabs(request)
+    elif section_tabs:
+        request.qon_section_tabs(request)
+
+    generate_menus(request)
+    
+    '''
+    <div class="documentContent" id="region-content">
+    <a name="documentContent"></a>
+    '''
+
+def left_margin [html] (request, suppress_login=0):
+    user = get_user()
+    if not suppress_login:
+        login_form(request)
+        
+    if not request.get_cookie('quick'):
+        if hasattr(request, str('qon_help_block')):
+            request.qon_help_block
+        
+        if user is not None:
+            _watch_list(request)
+            qon.ui.blocks.group.group_menu(user)
+            _whos_online(request)
+   
+        if hasattr(request, str('qon_left_blocks')):
+            for call in request.qon_left_blocks:
+                call(request)
+
+
+def footer [html] (title=None, additional_omniture_variables={}):
+    request = get_request()
+    
+    '''
+    </div>
+    ''' # region-content
+    
+    if hasattr(request, str('qon_group')) or hasattr(request, str('qon_section_tabs')):
+        # close documentEditable div
+        '''
+        </div>
+        '''
+    '''
+    </td>
+    '''
+    
+    if 0:
+        '''
+        <td id="portal-column-two">
+        <div class="visualPadding">
+        &nbsp;
+        </div>
+        </td>
+        '''
+
+    '''    
+    </tr>
+    </tbody>
+    </table>
+    </div>
+    ''' # visual-portal-wrapper
+    
+    '''
+    <div id="portal-backtotop"><a href="#top"><img alt="top" src="/images/arrowUp.gif" width="9" height="6" border="0" /> back to top of page</a></div>
+    <hr noshade="noshade" /> 
+    <div id="portal-footer">
+    <p>
+    '''
+    _('Copyright &copy; 2004-2007, ned.com. All rights reserved.')
+    '''<br />'''
+    _('''Use of this site constitutes acceptance of the ned.com
+    <a href="%s">User Agreement</a> and <a href="%s">Privacy Policy</a>.''' % (path_to_user_agreement(),
+        path_to_privacy_policy()))
+    '''<br />'''
+    _('''This site is in BETA. Thank you for your patience and your help as we continue to improve the site.''')
+    '''<br />'''
+    href(path_to_colophon(), _('Colophon'))
+    if request.get_cookie('quick'):
+        ''' <a href="/home/normal_css">Normal CSS</a>'''
+    '''</p></div>'''
+
+    '</body></html>'
+
+
+def _whos_online [html] (request):
+    hits = get_user_database().hit_db.get_hits(qon.user.User.idle_timeout)
+    hits.sort()
+    hits.reverse()
+    cells = []
+    for h in hits:
+        u = h[1]
+        cells.append(qon.ui.blocks.user.display_name(u, karma=0))
+    
+    '''
+    <div>
+    <div class="portlet">
+    <h5>
+    '''
+    _("Who's Online")
+    '''
+    </h5>
+    <div class="portletBody">
+    '''
+    format_portlet_content(cells)
+    '''
+    </div>
+    </div>
+    </div>
+    '''
+    
+def _watch_list [html] (request):
+    
+    def add_remove_item [html] ():
+        item = getattr(request, str('qon_watchable_item'), None)
+        if item:
+            if user.get_watch_list().is_watching(item):
+                watch_text = href('unwatch', 'Remove...', title="Remove this page from your watch list.")
+                
+            else:
+                watch_text = href('watch', 'Add...', title="Add this page to your watch list.")
+            '''
+            <div class="portletMore">%s</div>
+            ''' % watch_text
+
+    user = get_user()
+    if user is not None:
+        watch_list = user.get_watch_list()
+        watched_items = watch_list.watched_items()
+        changed_items = watch_list.changed_unseen_items()
+        
+        '''
+        <div>
+        <div class="portlet">
+        <h5>
+        '''
+        _("My Watch List.")
+        '''
+        </h5>
+        <div class="portletBody">
+        '''
+        # sort watch list by date
+        all_watched_items = sort_list(watched_items, lambda x: x.watchable_modified_date())
+
+        # only show a small number here...
+        num_to_show = 10
+        num_watched_items = len(all_watched_items)
+        watched_items = all_watched_items[0:num_to_show]
+
+        cells = []
+        for item in watched_items:
+            is_changed = item in changed_items
+            href_to_item = path_to_obj(item)
+            if is_changed and isinstance(item, qon.blog.BlogItem):
+                href_to_item = qon.ui.blocks.blog.full_path_to_unread(item, user)
+            
+            item_text = href(href_to_item, un_camel_case(format_string(item.watchable_name())),
+                title=item.watchable_info())
+            
+            if is_changed:
+                cells.append('<strong>' + item_text + '</strong>')
+            else:
+                cells.append(item_text)
+        
+        #'''<div class="portletContent odd">'''
+        if not cells:
+            cells = ['&nbsp;']
+        format_portlet_content(cells)
+
+        add_remove_item()
+
+        summary = ""
+        if num_to_show < num_watched_items:
+            summary = "(%i total)" % (num_watched_items)
+        more_link = href("/my/watch_list/", "More...", "My Complete Watch List")
+        """<div class="portletMore">%s %s</div>""" % (summary, more_link)
+        #'''</div>'''
+        
+        '''
+        </div>
+        </div>
+        </div>
+        '''
+        
+        '''
+        <div>
+        <div class="portlet">
+        <h5>
+        '''
+        _("Footprints")
+        '''
+        </h5>
+        <div class="portletBody">
+        '''
+        
+        cells = []
+        for item in watch_list.footprints():
+            cells.append(href(path_to_obj(item), un_camel_case(format_string(item.watchable_name())),
+                title=item.watchable_info()))
+        
+        if not cells:
+            cells = ['&nbsp;']
+        format_portlet_content(cells)
+        
+        '''
+        </div>
+        </div>
+        </div>
+        '''
+
+    
+def watch_menu_item(item, path=''):
+    # suitable for use in add_menu
+    user = get_user()
+    if user is not None:
+        if user.get_watch_list().is_watching(item):
+            return (('%sunwatch' % path, _('Stop watching')))
+        else:
+            return (('%swatch' % path, _('Watch')))
+    else:
+        return (('%swatch' % path, _('Watch'), 0))
+        
+def set_watchable_item(request, item, seen=True):
+    request.qon_watchable_item = item
+    if seen and item:
+        item.watchable_seen()
+
+def set_emailable_item(request, item):
+    request.qon_emailable_item = item     
+
+def path_to_help():
+    return '/group/help/ws/'
+    
+def path_to_punctuation_help():
+    return path_to_help() + 'Punctuation%20Help/prt'
+    
+def path_to_user_agreement():
+    return path_to_help() + 'User%20Agreement/'
+    
+def path_to_privacy_policy():
+    return path_to_help() + 'Privacy%20Policy/'
+    
+def path_to_colophon():
+    return path_to_help() + 'Colophon/'
+    
+def set_help_block(request, name):
+    """Set the global help block to point to a page called `name`"""
+    title = url_quote_no_slashes('Help on: %s' % name)
+    path = path_to_help() + title + '/'
+    request.qon_help_block = htmltext('''
+    <div class="portlet"><h5>Help</h5>
+    <div class="portletBody">
+    <div class="portletContent tighter odd"><a href="/group/help/ws/index/">Help index</a></div>
+    <div class="portletContent tighter even">%s</div>
+    </div>
+    </div>
+    ''' % href(path, _('Help on this page'), target='_blank'))
+
+def add_feed_block(request, feeds):
+    """Add feed links. Feeds: { type -> [(name1, url1), ...] }."""
+    feed_text = []
+    
+    for type, links in feeds.iteritems():
+        links_text = []
+        for name, url in links:
+            links_text.append(str(href(url, name)))
+        feed_text.append('%s: %s' % (type, ' '.join(links_text)))
+    
+    h = '''<div>
+    <span class="subtitle">%s</span>
+    </div>
+    ''' % '<br />\n'.join(feed_text)
+    add_left_block(request, lambda x: htmltext(h))
+
+def add_left_block(request, call):
+    if not hasattr(request, 'qon_left_blocks'):
+        request.qon_left_blocks = []
+    request.qon_left_blocks.append(call)
+
+def pop_left_block(request):
+    """Remove previously added left block. Use with care."""
+    if hasattr(request, 'qon_left_blocks'):
+        request.qon_left_blocks = request.qon_left_blocks[:-1]
+
+def navigation [html] (list, title=None):
+    # list: ((url, text), ...)
+    if len(list) > 0:
+        if title is None:
+            title = _('From here:')
+        '<p class="title">%s</p>' % title
+        '<ul>'
+        for (url, text) in list:
+            li(href(url, text))
+        '</ul>'
+
+
+def has_https():
+    """Return True if ANY site we're running supports https."""
+    
+    from dulcinea import site_util
+    config = site_util.get_config()
+
+    for site in site_util.list_sites():
+        if config.get(site, 'https-address'):
+            return True
+
+    return False or not local.HTTPS_LOGIN
+    
+def set_secure_user_cookie(request, user):
+    """Sets a secure cookie using WSSL authentication."""
+    
+    # don't set secure cookie unless we're in https
+    if local.HTTPS_LOGIN and request.scheme != 'https':
+        return
+    
+    if user:
+        from qon.ui.util import set_cookie
+        import qon.atom
+        
+        # password is user's password_hash
+        password = user.get_password_hash()
+        
+        digest_creation_nonce = qon.atom.create_password_digest(password)
+        
+        # set a non-persistent cookie (expires=None)
+        set_cookie('aux1', '|'.join(digest_creation_nonce), expires=None, secure=local.HTTPS_LOGIN)
+    else:
+        set_cookie('aux1', "expired", expires=None, secure=local.HTTPS_LOGIN)
+        
+
+def secure_user_cookie_to_user(user_id, c):
+    """Given the contents of our aux1 authentication cookie (in c), return
+    the user identified, or None.
+
+    Must also provide user_id we are trying to authenticate.
+    """
+    if c:
+        import qon.atom
+
+        try:
+            digest, creation, nonce = c.split('|')
+            user = get_user_database().authenticate_user(user_id,
+                digest, creation, nonce, _HTTPS_secure_cookie_max_age)
+            
+            return user
+        except:
+            pass
+
+    return None
+
+
+def get_secure_user_cookie(request):
+    """Return user identified by secure cookie (WSSL), or None.
+    
+    Note that the user must already have a valid session, since
+    we query the user's user_id from the current session using
+    get_user().
+    """
+
+    if not get_user():
+        return None
+    
+    c = request.get_cookie('aux1')
+    return secure_user_cookie_to_user(get_user().get_user_id(), c)
+
+
+class SignInForm(Form):
+    """Form controller for sign-in"""
+    
+    submit_button = 'submit-login'
+    submit_buttons = [submit_button]
+    
+    def __init__(self, request, url='', override_https=False, override_action_url=''):
+        """Set override_https to True to force http non-SSL login. If set,
+        set override_action_url to a different submittal URL.
+        """
+       
+        # see if we support https login
+        if local.HTTPS_LOGIN and has_https() and not override_https:
+            action_url = full_url('/home/', 'https')
+            self.has_https = True
+        else:
+            action_url = override_action_url or full_url('/home/')
+            self.has_https = False
+            
+        if url:
+            self.redirect_url = url
+        else:
+            self.redirect_url = None
+
+        Form.__init__(self, use_tokens=False, action_url=action_url)
+        self.request = request
+        self.user = None
+        self._build_form()
+        
+    def _build_form(self):
+        self.add(StringWidget, 'email', title=_('Email address'), size=12)
+        self.add(PasswordWidget, 'password', title=_('Password'), size=12)
+        self.add_hidden('urlpath', value=self.redirect_url or self.request.get_path())
+        self.add_hidden('from_url', 'N')
+        self.add_submit(self.submit_button, _('Sign in'))
+
+    # override is_submitted() to allow "get" requests so that folks can sign in from a url.
+    #  We do this rather than actually changing the method to "get" because we want
+    #  the default form still to use "post" requests.
+    #  Note that the "get" request must have the from_url parameter set to Y
+    def is_submitted(self):
+        from_url = self['from_url']
+
+        request = get_request()
+        if self.method == 'post':
+            if request.get_method() == 'POST':
+                return True
+            else:
+                return (from_url == 'Y')
+        else:
+            return bool(request.form)
+        
+    def validate(self):
+        if not self.is_submitted():
+            return False
+        if self.has_errors():
+            return False
+        if self.get_submit() != self.submit_button:
+            return False
+            
+        email = self['email']
+        password = self['password']
+            
+        if email:
+            email = email.strip()
+        else:
+            self.set_error('email', _('Please enter an email address.'))
+                
+        try:
+            self.user = get_user_database().get_user_by_email(email)
+        except KeyError:
+            self.user = None
+            
+        # check internal user trying to sign in via http
+        if self.user and local.HTTPS_LOGIN and (self.has_https == False) and is_internal_user(self.user):
+            self.set_error('email', _(htmltext('''You must sign in using https. Go back to the <a href="/home/">home page</a> and sign in normally.''')))
+            return False
+        
+        if email and not self.user:
+            self.set_error('email', _("Invalid email address"))
+            return False
+        
+        if self.user and not password:
+            self.set_error('password', _("You must enter a password"))
+            return False
+        
+        if password:
+            password = password.strip()
+            
+        if self.user and password and not self.user.valid_password(password):
+            self.set_error('password', _("Invalid username or password."))
+            return False
+            
+        if self.user and self.user.is_disabled():
+            self.set_error('email', _('Sorry, this account has been temporarily disabled.'))
+            return False
+        
+        return not self.has_errors()
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            if self.user:
+                self.request.session.set_user(self.user)
+                
+                # set user's secure cookie
+                if (self.has_https or not local.HTTPS_LOGIN) and is_internal_user(self.user):
+                    set_secure_user_cookie(self.request, self.user)
+
+                qon.api.user_signed_in(self.user)
+
+                # check to see if we trigger any the admin ip monitoring tool                
+                qon.util.check_ip_monitor(self.user, get_request().get_environ('REMOTE_ADDR'))
+                
+                # redirect to https for internal users
+                
+                # check for valid urlpath: may be invalid during /user/new for some reason
+                urlpath = self['urlpath']
+                if not urlpath or not urlpath.startswith('/'):
+                    urlpath = '/home/'
+                if local.HTTPS_LOGIN and is_internal_user(self.user) and self.has_https:
+                    get_request().redirect(full_url(urlpath, 'https'))
+                else:
+                    get_request().redirect(full_url(urlpath, 'http'))
+
+def login_form [html] (request):
+    user = get_user()
+    if user is not None:
+        return
+        
+    def render [html] ():
+        # add 'not yet a member box'
+        box_text = get_page_template('left_anon_user_join', format='html')
+        if not box_text:
+            box_text = htmltext('<a href="/user/new">Join Us Now!</a>')
+        
+        '''
+        <div class="portlet">
+        <h5>Not yet a member?</h5>
+        <div class="portletBody">
+        <div class="portletContent even">
+        %s
+        </div>
+        </div>
+        </div>
+        ''' % box_text
+
+        '''
+        <div class="portlet">
+        <h5>Sign in</h5>
+        <div class="portletBody">
+        <div class="portletContent odd">
+        '''
+        form.render()
+
+        href("/user/newpass", _("Forgot password?"))
+        '<br />'
+        href(full_url("/home/non_ssl_signin", 'http'), _("No SSL support?"))
+        '''
+        </div>
+        </div>
+        </div>
+        '''
+        
+    form = SignInForm(request)
+
+    if not form.validate():
+        return render()
+        
+    form.commit()        
+    
+    # redirect to self to force session update
+    # return request.redirect(request.get_url())
+
+    
+punctuation_help = _('See') + ' ' + \
+    href(path_to_punctuation_help(), 
+    'Punctuation Help',
+    target='_blank') + ' ' + \
+    _('for tips on linking and making your page easy to read.') + ' ' + \
+    _('''To link to another workspace page in this group, put the page name in back-quotes and add an underscore at the end, like this: `Meeting Minutes`_. If the page name is a single word, leave off the back-quotes, like this: People_.''')
+    
+
+
+
+# reusable page navigation widget.
+#  href_string_template should be a string in the form of '<a href="...%s..">' where %s represents the page number
+#  of the page being linked to
+#  see qon.ui.search.ptl to see an example of use
+def get_pagenav(current_page, total_num_pages, href_string_template, max_num_pages_to_show_on_one_page=10):
+
+    num_pages_to_show = max(1, min(max_num_pages_to_show_on_one_page, total_num_pages))
+    first = int((current_page-1) / num_pages_to_show) * num_pages_to_show + 1
+    last = first + num_pages_to_show - 1
+    active_last = min(last, total_num_pages)
+    show_prev_dotdotdot = first > 1
+    show_next_dotdotdot = total_num_pages > last
+
+    # pagenums
+    pagenums = """<span class="pagenumbers">"""
+    if show_prev_dotdotdot:
+        pagenums += '%s...</a>' % (href_string_template % str(first-1))
+    for x in range(first, last+1):
+        if x == current_page:
+            pagenums += "[%s]" % x
+        elif x <= active_last:
+            pagenums += '%s&nbsp;%s&nbsp;</a>' % ((href_string_template % str(x)), str(x))
+        else:
+            pagenums += """<span class="disabled">&nbsp;%s&nbsp;</span>""" % x
+    if show_next_dotdotdot:
+        pagenums += '%s...</a>' % (href_string_template % str(last+1))
+    pagenums += "</span>"
+
+    # pagenav
+    pagenav = """<span class="pagenavigation">"""
+    if current_page > 1:
+        pagenav += '%s&laquo;&nbsp;prev&nbsp;page</a>&nbsp;&nbsp;&nbsp;' % (href_string_template % str(current_page-1))
+    else:
+        pagenav += '''<span class="disabled">&laquo;&nbsp;prev&nbsp;page&nbsp;&nbsp;</span>'''
+    pagenav += pagenums
+    if current_page < total_num_pages:
+        pagenav += '&nbsp;&nbsp;&nbsp;%snext&nbsp;page&nbsp;&raquo;</a>' % (href_string_template % str(current_page+1))
+    else:
+        pagenav += '''<span class="disabled">&nbsp;&nbsp;&nbsp;next&nbsp;page&nbsp;&raquo;</span>'''
+    pagenav += "</span>"
+
+    return htmltext(pagenav)
+
+# truncates a string to a max length of X characters, adding an ellipse if the string was truncated
+def truncate_string(string, X):
+    if len(string) <= X:
+        return string
+    s = "%s%s" % (string[0:X-3], '...')
+    return s
+
+# output the html of a widget (e.g the Stats, News, and Tips widgets on the home page)
+def format_widget [html] (header, items, className="widget"):
+    '''
+    <table class="%s"><tbody>
+        <tr>
+            <td class="widgetHeader" colspan="2">
+                %s
+            </td>
+        </tr>
+    ''' % (className, header)
+    for item in items:
+        '''
+        <tr>
+            <td class="widgetBullets"><img src="/images/widgetbullet.gif" width="5" height="5"></td>
+            <td class="widgetContents">
+                %s<br />
+            </td>
+        </tr>
+        ''' % item
+    '''
+    </tbody></table>
+    '''
+
+# output the news and tips widgets
+def news_tips [html] ():
+    
+    # News and tips
+    # -------------
+    try:
+        # first try to get it from a wiki page that staff can edit
+        newstips = htmltext(get_group_database()['sitedev'].get_wiki().pages['homepage_news_tips'].versions[-1].get_raw())
+    except:
+        # use this hardcoded text if only if wiki page lookup fails
+        news = []
+        news.append("News 1")
+        news.append("News 2")
+        news.append("News 3")
+        tips = []
+        tips.append("Tip 1")
+        tips.append("Tip 2")
+        tips.append("Tip 3")
+        newstips = '''
+                <table class="homepage-table"><tbody><tr>
+                    <td class="homepage-left-column">
+                        %s
+                    </td>
+                    <td class="homepage-right-column">
+                        %s
+                    </td>
+                </tr></tbody></table>
+                ''' % (qon.ui.blocks.util.format_widget("News", news, "widgetWide"), qon.ui.blocks.util.format_widget("Tips", tips, "widgetWide"))
+    '''
+    <!-- Begin News and Tips -->
+    %s
+    <!-- End News and Tips -->
+    ''' % newstips
+
+# output the a single news widget
+def news_only [html] ():
+    
+    # News only
+    # ---------
+    try:
+        # first try to get it from a wiki page that staff can edit
+        newstips = htmltext(get_group_database()['sitedev'].get_wiki().pages['homepage_news'].versions[-1].get_raw())
+    except:
+        # use this hardcoded text if only if wiki page lookup fails
+        news = []
+        news.append("News 1")
+        news.append("News 2")
+        news.append("News 3")
+        newstips = (qon.ui.blocks.util.format_widget("News", news))
+    '''
+    <!-- Begin News and Tips -->
+    %s
+    <!-- End News and Tips -->
+    ''' % newstips      
+
+# The simplest implementation of Omniture tracking is simply to include a .js file.
+# However, in order to take advantage of site-specific tracking (e.g., tracking
+#  page views within a group, tracking search terms, etc., we need to emit JS
+#  variables into the source).
+# This routine consolidates the emission of these JS variables, and emits the html
+#  that includes the .js file.
+# The caller can also pass in a dictionary to add more JS variables.  This should
+#  be rarely used, but is good to have in case there is no way for this routine
+#  to populate the variable on its own. (e.g. ui/qslash.ptl does it for tracking
+#  404 errors, and ui/user.ptl does it for tracking new users).
+
+# newuser = new user signed up; agreed = user accepted user agreement
+# newtopic = new discussion topic created; newcomment = new comment posted
+# fp/fn = postive/negative feedback left for content
+# ufp/ufn = positive/negative feedback left for a user
+# newpage = new workspace page created; editpage = workspace page edited
+# view = discussion or workspace page viewed;
+# editblog = discussion topic or comment edited
+# fmsg = feedback left with accompanying message (always combined with ufp or ufn)
+# fmsga = feedback left with accompanying anonymous message (always combined with ufp or ufn)
+
+event_map = dict(newuser='event1', agreed='event2', newtopic='event3', newcomment='event4', \
+                 fp='event5', fn='event6', ufp='event7', ufn='event8', \
+                 newpage='event9', editpage='event10', view='event11', editblog='event12', \
+                 fmsg='event13', fmsga='event14')
+
+def omniture_tracking_tags [html] (request, additional_omniture_variables={}):
+
+    u = get_user()    
+
+    # get path (e.g. path==['group', 'issues-env', 'news', '9']
+    fullpath = request.get_path()
+    path = fullpath.split(str('/'))
+    path = [p for p in path if len(p)]  # get rid of empty pieces
+
+    # get searchterms    
+    searchterms = request.get_form_var('SearchableText') or ''
+    searchterms = searchterms.lower()
+
+    subsection = ''    
+
+    # deduce group (we'll populate Omniture's 'channel' (aka 'site section') variable with the group name).
+    #  These show up as in the Segmentation menu of the reporting tool
+    group = ''
+    if len(path)>1 and path[0] == 'group':
+        group = path[1]
+        # figure out what subsection we're in
+        subsection = '/group/___/'
+        if len(path)>2:
+            subsection += path[2]
+
+    # deduce user subsection
+    if len(path)>1 and path[0] == 'user':
+        # figure out what subsection we're in
+        subsection = '/user/___/'
+        if len(path)>2:
+            subsection += path[2]
+
+    # track anonymous vs signed-in users
+    if u:
+        signed_in = 'Signed-In'
+    else:
+        signed_in = 'Anonymous'
+
+    # track user class
+    userclass = ''
+    if u:
+        year = u.member_since().year
+        month = u.member_since().month
+        if month < 10:
+            month = "0" + str(month)
+        userclass = str(year) + "-" + str(month)
+
+    # track where in the hierarchy people like to go
+    hierarchy = '|'.join(path)
+
+    # process event(s) if they were passed in the URL as parameter.
+    #  The reason that we have to do this is that there are many events (eg. posting a new topic)
+    #   where we end up redirecting the user to the same page she was already on.  So
+    #   there's no way for this routine to register the event unless the redirect itself
+    #   adds a parameter to the query string (e.g "e") to signify the event.
+    #  There are a few events, like newuser, that don't use the "e" paramater, as the
+    #   code renders an explicit success page on which we can add the variable.
+    #  The reason that elist is a list is that multiple events (e.g. e=newcomment&e=ufp)
+    #   can be passed at once
+    event_list = []
+    elist = request.get_form_var('e')
+    if elist:
+        if type(elist) is not list:
+            elist = [elist]
+        try:
+            event_list = [event_map[e] for e in elist]
+        except KeyError:
+            pass
+
+    # add "view" event whenever a blogitem or wikipage is viewed
+    if len(path)>2 and (path[2] == 'news' or path[2] == 'ws'):
+        event_list.append('event11')
+            
+    events = ','.join(event_list)
+        
+    '''
+    <!-- SiteCatalyst code version: G.7.
+    Copyright 1997-2004 Omniture, Inc. More info available at
+    http://www.omniture.com --><script language="JavaScript"><!--
+    var s_pageName="%(pagename)s"
+    var s_channel="%(channel)s"
+    var s_hier1="%(hier1)s"
+    var s_prop1="%(prop1)s"
+    var s_prop2="%(prop2)s"
+    var s_prop3="%(prop3)s"
+    var s_prop4="%(prop4)s"        
+    /* Event Variables */
+    var s_campaign=""
+    var s_events="%(events)s"
+    var s_products=""
+    var s_eVar1="%(eVar1)s"
+    var s_eVar2="%(eVar2)s"
+    ''' % dict(pagename=fullpath, channel=group, hier1=hierarchy, prop1=searchterms, prop2=signed_in, prop3=subsection, prop4=userclass, events=events, eVar1=searchterms, eVar2=signed_in)
+
+    # emit any additional variables that the caller asked to have emitted for tracking.
+    # (e.g., qslash.ptl setting the s_pageType to "errorPage")
+    for name, value in additional_omniture_variables.items():
+        '''
+        var %s="%s"
+        ''' % (name, value)
+
+    '''
+    //--></script><script language="JavaScript" src="//%s/js/s_code_remote.js"></script>
+    <!-- End SiteCatalyst code version: G.7. -->
+    '''% request.get_server()
+
+def group_from_object (obj):
+    """ if the object is in a group, return that group, otherwise None. """
+    group = None
+
+    t = type(obj)
+    if t is qon.blog.BlogItem:
+        tihb = type(obj.blog.ihb)
+        if tihb is qon.group.Group:
+            group = obj.blog.ihb
+    elif t is qon.wiki.WikiPage:
+        group = obj.wiki.group
+    elif t is qon.ticket.TicketTracker:
+        group = obj.group
+    elif t is qon.poll.Poll:
+        group = obj.container.ihb
+    #elif t is qon.blog.Blog:
+
+    return group
+
+# given a blogitem, wikipage, group, user, or poll,
+# return a single-line display for the object, suitable for lists (like what's hot lists)
+def fancy_one_line_display [html] (obj, dont_bold = False, alt_href=None):
+    image = ''
+    title = ''
+    located = ''
+    updated = ''
+    t = type(obj)
+    if t is qon.blog.BlogItem:
+        #title = href(path_to_obj(obj), "%s (%s)" % (obj.title, obj.get_karma_score()))        
+        tihb = type(obj.blog.ihb)
+        if tihb is qon.group.Group:
+            # link directly to comment
+            item = obj
+            if item.parent_blogitem:
+                title = "%s %s on %s %s" % (href(qon.ui.blocks.blog.path_to_comment_in_item(item.parent_blogitem, item), "Comment"), href(qon.ui.blocks.util.path_to_obj(item) + "feedbacklist", "(%s)" % item.get_karma_score()), href(qon.ui.blocks.util.path_to_obj(item.parent_blogitem), "%s" % item.parent_blogitem.title), href(qon.ui.blocks.util.path_to_obj(item.parent_blogitem) + "feedbacklist", "(%s)" % item.parent_blogitem.get_karma_score()))
+            else:
+                title = qon.ui.blocks.blog.format_item_title(obj, dont_bold = dont_bold, alt_href=alt_href)
+
+            group = obj.blog.ihb
+
+            image = '<img src="/images/discussionitem_icon.gif" alt="discussion item" title="Discussion Item" height="16" width="16" />&nbsp;'
+            located = '<span class="discreet"> in %s</span>' % href(path_to_obj(group), group.display_name())
+        elif tihb is qon.user.User:
+            item = obj
+            if item.parent_blogitem:
+                title = "%s %s on %s %s" % (href(qon.ui.blocks.blog.path_to_comment_in_item(item.parent_blogitem, item), "Comment"), href(qon.ui.blocks.util.path_to_obj(item) + "feedbacklist", "(%s)" % item.get_karma_score()), href(qon.ui.blocks.util.path_to_obj(item.parent_blogitem), "%s" % item.parent_blogitem.title), href(qon.ui.blocks.util.path_to_obj(item.parent_blogitem) + "feedbacklist", "(%s)" % item.parent_blogitem.get_karma_score()))
+            else:
+                title = qon.ui.blocks.blog.format_item_title(obj, dont_bold = dont_bold, alt_href=alt_href)
+
+            #title = qon.ui.blocks.blog.format_item_title(obj, dont_bold = dont_bold, alt_href=alt_href)
+            user = obj.blog.ihb
+            image = '<img src="/images/personal_news.gif" alt="user news" title="User News" height="16" width="16" />&nbsp;'
+            located = '<span class="discreet"> in %s</span>' % href(path_to_obj(user) + "news/", "%s's personal news" % user.display_name())
+    elif t is qon.wiki.WikiPage:
+        group = obj.wiki.group
+        # title = href(path_to_obj(obj), "%s (%s)" % (obj.versions[-1].title, obj.get_karma_score()))
+        title = qon.ui.blocks.wiki.format_version_title(obj)
+        image = '<img src="/images/file_icon.gif" alt="workspace page" title="Workspace Page" height="16" width="16" />&nbsp;'
+        located = '<span class="discreet"> in %s</span>' % href(path_to_obj(group), group.display_name())
+    elif t is qon.wiki.Wiki:
+        group = obj.group
+        image = '<img src="/images/topic_icon.gif" alt="entire workspace" title="Workspace" height="16" width="16" />&nbsp;'
+        located = '<span class="discreet"> in %s</span>' % href(path_to_obj(group), group.display_name())
+        title = href(path_to_obj(obj), "%s" % obj.watchable_name())
+    elif t is qon.user.User:
+        title = display_name(obj)
+        image = '<img src="/images/user.gif" alt="user profile" title="User Profile" height="16" width="16" />&nbsp;'
+    elif t is qon.user.UserGroup:
+        title = display_name(obj)
+        image = '<img src="/images/group.gif" alt="group" title="Group" height="16" width="16" />&nbsp;'
+    elif t is qon.ticket.TicketTracker:
+        group = obj.group
+        title = href(path_to_obj(obj), "%s" % obj.name)
+        located = '<span class="discreet"> in %s</span>' % href(path_to_obj(group), group.display_name())
+    elif t is qon.poll.Poll:
+        group = obj.container.ihb
+        title = href(path_to_obj(obj), "%s" % obj.title)
+        image = '<img src="/images/poll_icon.gif" alt="poll" title="Poll" height="16" width="16" />&nbsp;'        
+        located = '<span class="discreet"> in %s</span>' % href(path_to_obj(group), group.display_name())        
+    elif t is qon.blog.Blog:
+        # blog shows up for personal news, discussions tab in groups... 
+        #image = '<img src="/images/group.gif" alt="discussion item" title="Discussion Item" height="16" width="16" />&nbsp;'
+        image = '<img src="/images/topic_icon.gif" alt="discussion item" title="Discussion Item" height="16" width="16" />&nbsp;'
+        title = href(path_to_obj(obj), "%s" % obj.watchable_name())
+        located = ''
+    else:
+        title = str(obj)    # indication to us that we need to implement
+            
+    return image + title + located
+
+def cookie_this_page(obj):
+    """Given an obj (e.g., BlogItem, Poll, WikiPage, User, Group),
+    drop a cookie so that any 'dead end' processes can allow the user to continue
+    with the last content that she was reading.  Currently, this is used by the
+    Start Here workspace page for when a new user first signs in"""
+
+    # jimc: we only track the workspace or discussion that they were reading
+    # before they logged it.  Otherwise this always shows the current page.
+    if get_user():
+        return
+
+    from qon.ui.util import set_cookie
+    set_cookie("last_title", urllib.quote(formatted_display_name_plain(obj)), expires='Fri, 01-Jan-2010 00:00:00 GMT')
+    set_cookie("last_url", path_to_obj(obj), expires='Fri, 01-Jan-2010 00:00:00 GMT')
+
+
+

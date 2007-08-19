@@ -1,0 +1,8 @@
+anchor-textcolor        338800
+code-pre-background     dee7ec
+contentnav-background   d9c98d
+contentnav-border       c9b97d
+contentnav-textcolor    666666
+globalnav-background    cde2a7
+globalnav-border        bdd297
+globalnav-textcolor     666666

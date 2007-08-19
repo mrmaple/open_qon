@@ -1,0 +1,80 @@
+'''
+$Id: qslash.ptl,v 1.19 2007/06/08 17:52:43 jimc Exp $
+'''
+
+from quixote.errors import AccessError, TraversalError
+from dulcinea.site_util import get_root_exports
+from qon.base import get_user
+from qon.ui import home, user, admin, group, search, whatsnew, my, atom, whatshot
+from qon.ui import blocks
+from qon.ui.util import AuthorizationError, RedirectError
+from datetime import datetime
+
+_q_exports = get_root_exports()
+
+def _q_access(request):
+    """Global access check."""
+
+    # for internal users, don't require additional authentication cookie
+    # when accessing rss or xml feeds
+    url = request.get_url()
+    if url.endswith('/rss') or url.endswith('.xml'):
+        no_cookie_check = True
+    else:
+        no_cookie_check = False
+    
+    # check for internal users - will raise RedirectError if necessary
+    blocks.util.check_internal_user(request, get_user(), no_cookie_check=no_cookie_check)
+
+def _q_exception_handler [html] (request, exception):
+    if isinstance(exception, AccessError):
+        request.response.set_status(exception.status_code)
+        title = "Access error: %s" % exception.title
+        blocks.util.header(request, title)
+        if exception.public_msg:
+            htmltext(exception.public_msg)
+        else:
+            if get_user() is None:
+                '''<p class="alert">Sorry, this page is available only to ned.com members.</p>
+                <b>If you are already a member:</b><br />
+                &nbsp;use the sign-in box to the left to sign-in and view this content.<br />
+                <b>If you are not yet a member:</b><br />
+                &nbsp;join now by entering your email address in the yellow box to the left.<br />
+                </p>'''
+            else:
+                '<p class="alert">Sorry, you don\'t have access to that page.</p>'
+                
+        blocks.util.footer(additional_omniture_variables=dict(s_pageType='errorPage'))
+    elif isinstance(exception, TraversalError):
+        request.response.set_status(exception.status_code)
+        title = "Page not found"
+        blocks.util.header(request, title)
+        '<p class="alert">Sorry, that page wasn\'t found.'
+        
+        # show notice until 2005-03-04 (about 2 weeks after roll out)
+        if datetime.utcnow() < datetime(2005, 3, 4, 0, 0, 0, 0):
+            ' You might check the <a href="/group/help/ws/what%27s%20where%3F/">What\'s Where?</a> page to see where it went.'
+            
+        '</p>'
+        blocks.util.footer(additional_omniture_variables=dict(s_pageType='errorPage'))
+    elif isinstance(exception, AuthorizationError):
+        request.response.set_status(exception.status_code)
+        
+        # add headers from authorization exception
+        if hasattr(exception, str('headers')):
+            for k, v in exception.headers.items():
+                request.response.set_header(k, v)
+        
+        title = exception.title
+        blocks.util.header(request, title)
+        if exception.public_msg:
+            htmltext(exception.public_msg)
+        else:
+            '<p class="alert">Sorry, authorization is required.</p>'
+        blocks.util.footer(additional_omniture_variables=dict(s_pageType='errorPage'))
+    elif isinstance(exception, RedirectError):
+        return request.redirect(exception.url)
+    else:
+        raise exception
+
+

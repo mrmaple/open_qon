@@ -1,0 +1,393 @@
+"""
+$Id: wiki.ptl,v 1.61 2007/02/18 15:04:39 jimc Exp $
+
+"""
+import sys
+from quixote import get_request, get_user, get_publisher
+from quixote.html import href
+import qon.atom
+from qon.util import xml_escape
+import qon.ui.blocks.user
+import qon.ui.blocks.util
+
+from qon.ui import messages
+_ = messages.t
+def _h(x): return htmltext(_(x))
+
+
+def path_to_wiki(wiki):
+    return qon.ui.blocks.group.path_to_group(wiki.group) + 'ws/'
+
+def path_to_page(page):
+    return path_to_wiki(page.wiki) + page.name + '/'
+
+def path_to_version(version):
+    return path_to_page(version.page) + version.page.revision_index(version) + '/'
+
+def recent_changes [html] (wiki, count=5):
+    pages = wiki.recent_changes()[:count]
+    #return page_list_paragraphs(pages)
+    return page_list_table(pages)
+    
+def highest_rated [html] (wiki, count=5):
+    pages = wiki.highest_score_items(count=count)
+    return page_list_table(pages)
+    
+def cant_show_item [html] (item, path):
+    score = item.get_karma_score()
+        
+    '''<div class="indent">
+    <p><em>Contents folded due to low feedback score (%s).</em> <a href="%s">Click here</a> to view.</p>
+    </div>
+    ''' % (score, path)
+
+    
+    
+def format_version_title [html] (page, version=None, karma=1, local_group=None):
+    # if local_group is not None, include group name in page name if page's
+    # group is not local_group. E.g.: /suggestions/Page name
+
+    if version is None:
+        version = page.versions[-1]
+        
+    title = version.title or page.name
+    if local_group:
+        if page.wiki.group is not local_group:
+            title = "/%s/%s" % (page.wiki.group.get_user_id(), title)
+    title = qon.ui.blocks.util.format_string(title, 64)
+    
+    path = path_to_page(page)
+    title_html = href(path, title, title=format_version_title_tooltip(page, version))
+
+    if karma:
+        '%s %s' % (
+            title_html,
+            href('%sfeedbacklist'%path, qon.ui.blocks.user.karma_score(page)),
+            )
+    else:
+        title_html
+    
+
+def format_version_title_tooltip(page, version=None):
+    if version is None:
+        version = page.versions[-1]
+        
+    tip = u''
+    tip += 'By'
+    tip += ' '
+    tip += str(qon.ui.blocks.user.display_name_plain(version.author)).decode('utf-8')
+    tip += ', '
+    tip += qon.ui.blocks.util.format_datetime_short(version.date)
+    tip += '.'
+    
+    if get_publisher():     # no publisher from command line
+        user = get_user()
+        if user and page.can_read(user):
+            tip += '\n'
+            tip += qon.ui.blocks.util.format_string(version.get_raw(), 120, no_nl=1).decode('utf-8')
+        
+    # since tooltips are destined to be embeded in HTML, let's convert to ascii
+    # under current 4/26/05 version of docutils, it chokes when trying to add
+    # an HTML attribute that is not ascii.
+    return tip.encode('ascii', 'replace')
+
+def format_page_title(page):
+    return format_version_title(page)
+    
+def display_name [html] (page, karma=1):
+    return format_version_title(page, karma=karma)
+    
+def display_name_plain [html] (page):
+    return qon.ui.blocks.util.format_string(page.versions[-1].title or page.name, 64)
+    
+def format_item [html] (page, local_group=None):
+    version = page.versions[-1]
+    '<div class="forum-item-info">'
+    '<p>'
+    '<span class="title">'
+    format_version_title(page, version, local_group=local_group)
+    '</span>'
+    '<br />'
+    '<span class="subtitle">By %s, %s</span>' % (
+        qon.ui.blocks.user.display_name(version.author),
+        qon.ui.blocks.util.format_datetime(version.date)
+        )
+    '</p>'
+    '</div>'
+
+def page_list_table [html] (pages):
+    cells = []
+    for page in pages:
+        version = page.versions[-1]
+        cell = [
+            format_version_title(page, version),
+            qon.ui.blocks.user.display_name(version.author),
+            qon.ui.blocks.util.format_ago(page.watchable_last_change())
+            ]
+        cells.extend(cell)
+    qon.ui.blocks.util.format_table(3, cells, headings=['Title', 'Last Editor', 'Updated'],
+        table_class="recentchanges-listing")
+
+def page_list_paragraphs [html] (pages, local_group=None):
+    cur_user = get_user()
+    for page in pages:
+        if page.can_read(cur_user):
+            format_item(page, local_group=local_group)
+
+def redirector_to_wiki(wiki, name):
+    """Return a Redirector object suitable for use in _q_lookup to redirect to page `name'"""
+    from quixote.util import Redirector
+    return Redirector(path_to_wiki(wiki) + '%s/' % name)
+
+# ----------------------------------------------------------
+
+def _create_page_entry(page, add_group_title):
+    version = page.versions[-1]
+    
+    entry = qon.atom.Entry(messages.base_url)
+    entry.title = xml_escape(version.title)
+    if add_group_title:
+        entry.title += xml_escape(' in %s' % page.wiki.group.watchable_name())
+    entry.url = qon.ui.blocks.util.full_url(path_to_page(page))
+    entry.feed = entry.url + 'atom.xml'
+    entry.feed_title = xml_escape(version.title, escape_quote=True)
+    entry.id = qon.ui.blocks.util.atom_id(page)
+    entry.set_modified(page.watchable_last_change())
+    entry.set_issued(page.watchable_last_change())
+    entry.set_created(version.date)
+    
+    author = qon.atom.Person(xml_escape(version.author.display_name()))
+    author.url = qon.ui.blocks.util.full_url(qon.ui.blocks.user.path_to_user(version.author))
+    entry.author = author
+    
+    return entry
+
+def format_atom_page(page, add_group_title=False):
+    """Return an Atom Entry for this page.
+
+    If add_group_title is True, will add the group's name to the
+    item's title.
+    """
+
+    entry = _create_page_entry(page, add_group_title)
+    entry.content = xml_escape(page.get_cached_html2())
+    
+    return entry
+
+def format_atom_page_summary(page, add_group_title=False):
+    """Return an Atom Entry for this page, including only last editor information.
+
+    If add_group_title is True, will add the group's name to the
+    item's title.
+    """
+
+    version = page.versions[-1]
+
+    entry = _create_page_entry(page, add_group_title)
+    # XXX do we need different atom id, since this entry does not include content?
+
+    entry.content = xml_escape('''
+    <p>
+    <b>Last Editor: </b>
+    %s, %s
+    </p>
+    ''' % (
+        qon.ui.blocks.user.display_name(version.author),
+        qon.ui.blocks.util.format_datetime(page.watchable_last_change()),
+        )
+    )
+    
+    return entry
+
+
+def format_atom_wiki_feed(wiki):
+    """Return an Atom Feed for this wiki."""
+    feed = qon.atom.Feed()
+    feed.title = xml_escape(wiki.watchable_name())
+    feed.url = qon.ui.blocks.util.full_url(path_to_wiki(wiki))
+    feed.set_modified(wiki.watchable_last_change())
+    return feed
+    
+
+# ----------------------------------------------------------
+
+def rst_to_html(rst, wiki=None, container=None, reader=None, writer=None, debug=0, suppress_tooltip=0):
+    """Parse reStructuredText and return HTML fragment suitable for insertion into HTML page.
+    
+    container is usually a WikiPage, but it may be a BlogItem. Generally used by
+    custom directives to add dependencies. Generally, container must implement
+    add_html_dependency.
+    """
+    
+    if rst is None:
+        return ''
+    
+    if container:
+        assert hasattr(container, 'add_html_dependency')
+    
+    # temporarily lower the recursion limit dramatically (it's typically 1000)
+    save_limit = sys.getrecursionlimit()
+    sys.setrecursionlimit(200)
+    
+    from docutils.core import publish_string
+    from docutils.utils import SystemMessage
+    
+    # none/5, info/1, warning/2, error/3, severe/4
+    # suppresses anything below the level given
+    report_level = 5
+    if debug:
+        report_level = debug
+        
+    if not reader:
+        from qon.wiki import Reader, Writer
+        reader = Reader()
+
+    if not writer:
+        from qon.wiki import Writer
+        writer = Writer()
+    
+    try:
+        html_doc = publish_string(rst,
+            reader=reader,
+            writer=writer,
+            writer_name='html',
+            settings_overrides={
+                'input_encoding': 'utf-8',
+                'output_encoding': 'utf-8',
+                'report_level': report_level,
+                'halt_level': 5,    # never halt
+                'wiki': wiki,
+                'qon_container': container,
+                'suppress_tooltip': suppress_tooltip,
+                'file_insertion_enabled': False,
+                                    
+                },
+            )
+
+        # very long links may cause wide pages.  We do a regex search & replace
+        import re
+        def add_spaces(match):
+            link_text = re.sub(str('([^ ]{32})'), r'\1 ', match.group(2))
+            return match.group(1) + link_text + match.group(3)
+        long_link = re.compile(str('(<[a|A] .*>)(.*)(</[A|a]>)'))
+        html_doc = long_link.sub(add_spaces, html_doc)
+
+#    except (SystemExit, SystemMessage, NotImplementedError, IndexError):
+
+    # we get all manner of exceptions now from the rst code...
+    except:
+        error = '''<p class="alert">An unrecoverable error occurred trying to convert your plain text
+into HTML.</p><p>
+The most common reason for this is improper formatting of indented headings. Please check your document,
+remove any headings or text that is underlined/overlined and indented, and try again.
+</p>
+<p>Your plain text follows:</p>
+<pre>
+%s
+</pre>
+''' % rst
+        sys.setrecursionlimit(save_limit)
+        return htmltext(error)
+    
+    sys.setrecursionlimit(save_limit)
+    return htmltext(
+        html_doc[html_doc.find('<body>')+6:html_doc.find('</body>')]
+        )
+
+# ----------------------------------------------------------
+from docutils.parsers.rst import directives
+from docutils import nodes
+
+from qon.wiki import clean_page_name, resolve_page_name
+
+def directive_include(name, arguments, options, content,
+    lineno, content_offset, block_text, state, state_machine):
+    """reStructuredText directive for including content of another workspace page.
+    
+    Usage::
+    
+        .. on-include:: page_name
+           :revision: int
+    
+    If the optional revision option is passed, will include that revision instead
+    of the most current revision.
+        
+    NOTE: we don't allow including pages in other groups because it is too complicated
+    to test the reader's ability to read the other group since we cache the generated HTML.
+    To provide this ability, we would have to generate the contents of pages that used this
+    directive on the fly.
+    """
+    
+    def do_recursion_error():
+        #error = state_machine.reporter.severe(
+        #    '''The document I'm including ("%s") refers back to me.''' % arguments[0],
+        #    nodes.literal_block(block_text, block_text), line=lineno)
+        #return [error]
+        return do_error('''The document I'm including ("%s") refers back to me.''' % arguments[0])
+    
+    def do_error(message):
+        html = '''<p class="alert">%s</p>''' % message
+        raw = nodes.raw('', str(html), format='html')
+        return [raw]
+    
+    cur_user = get_user()
+    wiki = state_machine.document.settings.wiki
+    page_name = clean_page_name(arguments[0])
+    revision = options.get('revision', None)
+    
+    if arguments[0].startswith('/'):
+        group, page_name, skip_index = resolve_page_name(arguments[0])
+        if group:
+            if not group.can_read(cur_user):
+                return do_error('''Sorry, you don't have permission to read that group ("%s").''' % arguments[0])
+            
+            # is this an internal group? If so, don't allow cross-link
+            if ('read' not in group.get_perms()[2]) and (group.get_wiki() is not wiki):
+                return do_error('''Sorry, you can't include a page from a non-public group ("%s").''' % arguments[0])
+            
+            wiki = group.get_wiki()
+            #return do_error('''Sorry, you can't include pages from other groups ("%s").''' % arguments[0])
+
+    # look up the included page
+    page = wiki.pages.get(page_name)
+    if not page:
+        return do_error('''Sorry, there is no page called "%s" in this Workspace.''' % arguments[0])
+            
+    # a specific revision?
+    if revision is not None:
+        try:
+            rev = page.versions[revision]
+        except IndexError:
+            return do_error('''Sorry, the page "%s" has no revision number "%d".''' % (arguments[0], revision))
+        else:
+            try:
+                html = rev.html()
+            except RuntimeError:
+                return do_recursion_error()
+    else:
+        # get current wiki page or container: could be WikiPage or BlogItem
+        container = state_machine.document.settings.qon_container
+        if page is not container:
+
+            if container:
+                container.add_html_dependency(page)
+
+            try:
+                html = page.get_cached_html()
+            except RuntimeError:
+                # re-add the dependency that was removed when the recursion was hit
+                if container:
+                    container.add_html_dependency(page)
+                return do_recursion_error()
+        else:
+            return do_error('''Sorry, I can't include myself: "%s".''' % arguments[0])
+
+    # html is utf-8 at this point
+    raw = nodes.raw('', html.decode('utf-8', 'replace'), format='html')
+    return [raw]
+
+directive_include.arguments = (1, 0, 1)    # 1 required arg, 0 optional args, yes whitespace
+directive_include.options = {'revision': directives.nonnegative_int}
+directive_include.content = False
+directives.register_directive('on-include', directive_include)
+

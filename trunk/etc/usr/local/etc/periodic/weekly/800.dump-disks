@@ -1,0 +1,12 @@
+#!/bin/sh
+
+# determine dump level (see dump(8))
+dl=0
+
+# do the dump
+
+echo "Dumping filesystems dump level $dl..."
+
+/sbin/dump -$dl -ua -f /dev/nsa0 /dev/da0s1h
+
+exit 3

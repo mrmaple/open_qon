@@ -1,0 +1,10 @@
+#!/bin/sh
+# ZEO instance start script
+
+PYTHON="/www/python/bin/python"
+RUNZEO="/usr/local/bin/runzeo.py"
+
+CONFIG_FILE="/www/etc/zeo.conf"
+
+
+exec "$PYTHON" "$RUNZEO" -C "$CONFIG_FILE" ${1+"$@"}

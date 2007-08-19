@@ -1,0 +1,62 @@
+"""
+$Id: message.ptl,v 1.11 2004/10/25 01:37:10 pierre Exp $
+"""
+from quixote import get_user
+from quixote.html import href
+
+import qon.ui.blocks.group
+import qon.ui.blocks.user
+import qon.ui.blocks.util
+
+from qon.ui import messages
+_ = messages.t
+def _h(x): return htmltext(_(x))
+
+def path_to_message(user, message):
+    return qon.ui.blocks.user.path_to_user(user) + 'msg/%d/' % user.message_index(message)
+
+def message_list [html] (user, messages=None, new_only=0, path=''):
+    if user is not None and (messages or user.has_messages()):
+    
+        def format_item [html] (msg, prefix=''):
+            return '%s%s' % (prefix, href('%s%s/' % (path, user.message_index(msg)),
+                qon.ui.blocks.util.format_string(msg.get_subject())))
+            
+        if messages is not None:
+            new = messages
+            prefix = ''
+        else:
+            new = user.new_messages()
+            prefix = '<span class="info">NEW</span> '
+
+        new.reverse()
+        
+        cells = []
+        for msg in new:
+            cells.extend((qon.ui.blocks.user.display_name(msg.get_sender(), karma=1),
+                format_item(msg, prefix),
+                qon.ui.blocks.util.format_datetime_short(msg.get_date()),
+                ))
+
+        if not new_only and (messages is None):
+            old = user.old_messages()
+            old.reverse()
+            for msg in old:
+                cells.extend((qon.ui.blocks.user.display_name(msg.get_sender(), karma=1),
+                    format_item(msg),
+                    qon.ui.blocks.util.format_datetime_short(msg.get_date()),
+                    ))
+                
+        qon.ui.blocks.util.format_table(3, cells, ['From', 'Subject', 'Date'])
+
+def new_messages_box [html] (user):
+    if user is None:
+        return ''
+    new_messages = user.new_messages()
+    if new_messages:
+        '<div class="box">'
+        '<span class="info">New Messages</span><br />'
+        message_list(user, messages=new_messages, new_only=1,
+            path='/user/%s/msg/' % user.get_user_id())
+        '</div>'
+

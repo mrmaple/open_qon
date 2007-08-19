@@ -1,0 +1,1152 @@
+h1, h2, h3, h4, h5, h6 { clear: both }
+
+/* plone style customizations */
+body {
+    font-family: 75% "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+}
+h1, h2, h3, h4, h5, h6 {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+}
+input {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+}
+pre {
+    font-size: 100%;
+}
+h1.group-name {
+    font-size: 180%;
+}
+
+.forum-listing
+{
+    font-size: 120%;
+}
+.forum-listing table {
+    width: 100%;
+}
+.forum-listing .listing td
+{
+    padding: 1.0em;
+}
+
+.user-listing
+{
+    font-size: 120%;
+}
+.user-listing .listing td
+{
+    padding: 0.5em;
+}
+
+.recentchanges-listing {
+    font-size: 120%;
+}
+
+.forum-listing-tight
+{
+    font-size: 120%;
+}
+.forum-listing-tight table {
+    width: 100%;
+}
+.forum-listing-tight .listing td
+{
+    padding: 0.5em;
+}
+
+.comment blockquote {
+    font-style: normal;
+}
+
+/* plone style extensions */
+
+.contentActions li.selected {
+    font-weight: bold;
+}
+
+.contentActions li.disabled {
+    color: silver;
+}
+
+.menuPosition span.disabled {
+    color: silver;
+}
+
+.portlet .tighter {
+    padding: 0.5em;
+}
+
+/* rst/plone interactions */
+
+.document blockquote {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+    font-style: normal;
+    font-size: 100%;
+}
+
+blockquote {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+    font-style: normal;
+    font-size: 100%;
+}
+
+
+/* ------------------------------------------- */
+
+/* colors */
+
+a {
+    color: #338800;
+}
+p a:visited {
+    color: #336600;
+    background-color: transparent;
+}
+hr {
+    color: #cde2a7;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    border-bottom: 1px solid #bdd297;
+}
+
+ul { 
+    list-style-image: url("/images/bullet.gif");
+}
+
+fieldset {
+    border: 1px solid #bdd297;
+}
+textarea {
+    border: 1px solid #bdd297;
+    width: auto ! important;
+}
+input {
+    border: 1px solid #bdd297;
+}
+select {
+    border: 1px solid #bdd297;  
+}
+code {
+    background-color: #dee7ec;
+    border: 1px dashed #bdd297;
+}
+pre {
+    border: 1px dashed #bdd297;
+    background-color: #dee7ec;
+}
+
+
+ 
+#portal-logo {
+    background: url("/images/logo.jpg") no-repeat;
+}
+#portal-logo a {
+    display: block;
+    text-decoration: none;
+    overflow: hidden;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    padding-top: 87px;
+    height: 0px !important;
+    height /**/: 87px;
+    width: 219px;
+    cursor: pointer;
+}
+#portal-globalnav li a {
+    border-color: #bdd297;
+    color: #666666;
+}
+#portal-globalnav li.selected a {
+    background-color: #cde2a7;
+    border: 1px solid #bdd297;
+    border-bottom: #cde2a7 1px solid;
+    color: #666666;
+}
+#portal-globalnav li a:hover {
+    background-color: #cde2a7;
+    border-color: #bdd297;
+    border-bottom-color: #cde2a7;
+    color: #666666;
+}
+#portal-personaltools {
+    background-color: #cde2a7;
+    border-top-color: #bdd297;
+    border-bottom-color: #bdd297;
+}
+#portal-personaltools .portalUser {
+    background: transparent url("/images/user.gif") center left no-repeat;
+}
+ 
+#portal-personaltools li {
+    background: transparent url("/images/linkOpaque.gif") center left no-repeat;
+    color: #666666;
+}
+#portal-personaltools li a {
+    color: #666666;
+}
+#portal-breadcrumbs {
+    border-bottom-color: #bdd297;
+}
+.contentViews {
+    border-bottom-color: #c9b97d;
+}
+.contentViews li a {
+    border: 1px solid #c9b97d;
+    color: #666666;
+    padding: 0 0.5em;
+}
+.contentViews .selected a {
+    background-color: #d9c98d;
+    border-bottom: #d9c98d 1px solid;
+    color: #666666;
+}
+.contentViews li a:hover {
+    background-color: #d9c98d;
+    color: #666666;
+}
+
+/***
+.contentActions {
+    border-collapse: collapse;
+    background-color: #d9c98d;
+    border-left: 1px solid #c9b97d;
+    border-right: 1px solid #c9b97d;
+    color: #666666;
+    text-align: right;
+    text-transform: lowercase;
+    padding: 0 0 0 1em;
+    z-index: 2;
+    height: 1.2em;
+}
+***/
+.contentActions {
+    background-color: #d9c98d;
+    border-left: 1px solid #c9b97d;
+    border-right: 1px solid #c9b97d;
+    color: #666666;
+}
+
+/***
+.contentActions li {
+    float: right;
+    background-image: url("/images/arrowDownAlternative.gif");
+    background-repeat: no-repeat;
+    background-position: center right;
+    z-index: 4;
+    border-left: 1px solid #c9b97d;
+    padding: 0 0 0 1em;
+    margin: 0 1em 0 0;
+}
+***/
+.contentActions li {
+    background-image: url("/images/arrowDownAlternative.gif");
+    background-repeat: no-repeat;
+    background-position: center right;
+}
+
+
+.contentActions a {
+    color: #666666;
+}
+
+/***
+.contentActions .actionMenu {
+    visibility: hidden;
+    z-index: 5;
+    position: absolute;
+    top: 0;
+    right: -1px;
+    background: #d9c98d;
+    overflow: hidden;
+    height: auto;
+    padding: 0;
+    margin: 1.2em 0 0 0;
+    border: 1px #c9b97d;
+    border-style: none solid solid solid;
+}
+***/
+
+.contentActions .actionMenu {
+    background: #d9c98d;
+    border: 1px #c9b97d;
+    border-style: none solid solid solid;
+    overflow: visible;	/* Alex added as a partial fix for trunctated drop-down menus in Firefox */
+    
+}
+
+.actionMenu li {
+    background-image: none;
+    border: none;
+}
+
+.actionMenu li a:hover {
+    background-color: #666666;
+}
+
+.actionMenu .actionSeperator a {
+    border-top: 1px solid #c9b97d;
+}
+
+
+.documentEditable .documentContent {
+    border: 1px solid #c9b97d;
+}
+
+.documentContent {
+    background: transparent;
+}
+
+
+#portal-footer {
+    background-color: #cde2a7;
+    border-top: 1px solid #bdd297;
+    border-bottom: 1px solid #bdd297;
+}
+
+#portal-backtotop {
+    float: none;
+    margin: 0em 1.5em 0em 0em;
+    text-align: right;
+}
+
+input.searchButton {
+    background: White url("/images/search_icon.gif") 2px 1px no-repeat;
+
+}
+
+.fieldRequired {
+    background: url("/images/required.gif") center left no-repeat;
+} 
+
+.formHelp {
+    color: #93918c;
+}
+
+.error {
+    /* Class for error indication in forms */
+    background-color: #daff5a;
+    border: 1px solid #dae400;
+}
+
+.error .fieldRequired {
+   color: #daff5a;
+} 
+
+.card {
+    background-color: #cde2a7;
+    border-color: #bdd297;
+}
+
+.portrait {
+    background-color: #cde2a7;
+    border-color: #bdd297;
+}
+
+.listing,
+.stx table {
+    border-left: 1px solid #bdd297;
+    border-bottom: 1px solid #bdd297;
+}
+.listing th {
+    background: #cde2a7;
+    border-top: 1px solid #bdd297;
+    border-bottom: 1px solid #bdd297;
+    border-right: 1px solid #bdd297;
+}
+.listing .even {
+    background-color: #ffffdd;
+}
+.listing td {
+    border-right: 1px solid #bdd297;
+}
+.portlet h5 { 
+    background: #ffffbb;
+    border: 1px solid #bdd297;
+    border-style: solid solid none solid;
+}
+.portlet h6 { 
+    background: #ffffbb;
+    border: 1px solid #bdd297;
+    border-style: solid solid none solid;
+}
+
+.portletBody {
+    border: 1px solid #bdd297;
+}
+.portletClose {
+    border-left: 1px solid #bdd297;
+}
+.portlet .even {
+    background-color: #ffffdd;
+}
+.comment {
+    background: #ffffee; 
+    border: 1px dashed #bdd297; 
+}
+
+.newcomment {
+    background: #fff0ee; 
+    border: 1px dashed #bdd297; 
+    padding: 0 1em 0.5em 1em;
+    margin-bottom: 1em;    
+}
+
+.comment h1,
+.comment h2,
+.comment h3,
+.comment h4, 
+.comment h5,
+.comment h6 {
+    border-bottom: 1px dashed #93918c;
+}
+.even {
+    background-color: #ffffdd;
+}
+.visualHighlight {
+    background-color: #ffffbb;
+}
+
+.discreet {
+    color: #93918c;
+}
+
+.preview {
+    color: #505050;
+    font-size: 90%;
+    line-height: normal;
+}
+
+
+.listingBar {
+    background-color: #cde2a7;
+    border-color: #bdd297;
+}
+.link-parent {
+    background: transparent url("/images/arrowUp.gif") 4px 5px no-repeat;
+}
+
+.link-user {
+    background: transparent url("/images/user.gif") 0 1px no-repeat;
+}
+
+.link-external {
+    background: transparent url("/images/link_icon.gif") 0px 1px no-repeat;
+}
+
+.link-https {
+    background: transparent url("/images/lock_icon.gif") 0px 1px no-repeat;
+}
+
+.link-mailto {
+    background: transparent url("/images/mail_icon.gif") 0px 1px no-repeat;
+}
+
+.link-news {
+    background: transparent url("/images/topic_icon.gif") 0px 1px no-repeat;
+}
+
+.link-ftp {
+    background: transparent url("/images/file_icon.gif") 0px 1px no-repeat;
+}
+
+.link-irc {
+    background: transparent url("/images/discussionitem_icon.gif") 0px 1px no-repeat;
+}
+
+.link-callto {
+    background: transparent url("/images/phone_icon.gif") 0px 1px no-repeat;
+}
+
+.link-comment {
+    background: transparent url("/images/discussionitem_icon.gif") center left no-repeat;
+}
+
+.optionsToggle {
+    border: 1px solid #bdd297;
+    background-color: #cde2a7;
+}
+
+#portal-column-content fieldset > * input:focus,
+#portal-column-content fieldset > * textarea:focus {
+    border-color: #dae400; 
+}
+
+
+/* ------------------------------------------- */
+
+/* rst styles */
+
+/*
+:Author: David Goodger
+:Contact: goodger@users.sourceforge.net
+:date: $Date: 2007/06/20 16:20:50 $
+:version: $Revision: 1.43 $
+:copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+*/
+
+/* "! important" is used here to override other ``margin-top`` and
+   ``margin-bottom`` styles that are later in the stylesheet or 
+   more specific.  See <http://www.w3.org/TR/CSS1#the-cascade>. */
+.first {
+  margin-top: 0 ! important }
+
+.last {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none 
+}
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+li {
+    margin-bottom: 0.5em;
+}
+
+dd {
+  margin-bottom: 0.5em }
+
+/* Uncomment (& remove this text!) to get bold-faced definition list terms
+dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em }
+
+div.footer, div.header {
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin-left: 1em ;
+  border: medium outset ;
+  padding: 0em 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+/* pmo
+hr {
+  width: 75% }
+*/
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font-family: serif ;
+  font-size: 100% }
+
+pre.line-block {
+  font-family: serif ;
+  font-size: 100% }
+
+pre.literal-block, pre.doctest-block {
+  margin-left: 2em ;
+  margin-right: 2em ;
+  background-color: #eeeeee }
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.option-argument {
+  font-style: italic }
+
+/* FIXME this needs to be disabled for IE6 displaying very wide
+pages, but disabling this probably breaks something else
+
+span.pre {
+  white-space: pre }
+***/
+
+span.problematic {
+  color: red }
+
+table {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.citation {
+  border-left: solid thin gray }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.footnote {
+  border-left: solid thin black }
+
+td, th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+th.docinfo-name, th.field-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap }
+
+h1 tt, h2 tt, h3 tt, h4 tt, h5 tt, h6 tt {
+  font-size: 100% }
+
+tt {
+  background-color: #eeeeee }
+
+ul.auto-toc {
+  list-style-type: none }
+
+
+/* qon styles */
+
+/* tag popularity */
+a.tag#p1 { font-size=90%; }
+a.tag#p2 { font-size=95%; }
+a.tag#p3 { font-size=98%; }
+a.tag#p4 { font-size=100%; }
+a.tag#p5 { font-size=110%; }
+a.tag#p6 { font-size=120%; }
+a.tag#p7 { font-size=130%; }
+a.tag#p8 { font-size=140%; }
+
+/* tag age in weeks old */
+
+div.tag-cloud { 
+    text-align: center; 
+    word-spacing: 1.2em; 
+    margin: 10px;
+    line-height: 1.5em;
+}
+
+.mini-cloud { 
+    text-align: left; 
+/*    word-spacing: 1.2em; */
+}
+
+.topheading	{ font-weight: bold; font-size: 1.8em; border-bottom: 1px solid #bdd297; }
+
+.indent {
+    display: block;
+    margin-top: 1em;
+    margin-left: 3em;
+    margin-bottom: 1em;
+    margin-right: 3em;
+}
+
+.indent-small {
+    margin-left: 1.7em;
+}
+
+
+div.header {
+    background: gray;
+    color: white;
+    font-size: large;
+    padding: 1ex;
+}
+
+a.newwikipage { text-decoration: none; border-bottom: dashed 1px; }
+
+td.title
+/*th*/		{ font-weight: bold; }
+td.smaller	{ font-size: 0.8em; }
+td.gray		{ font-size: 0.8em; color: gray; }
+
+table.groups { 
+    border-collapse: collapse;
+    width: 100%;
+}
+table.groups td { width: 50%; padding: 0em 1em; vertical-align: top; }
+table.groups th { width: 50%; padding: 0em 1em; text-align: left;  }
+
+
+div.menu	{ padding: 0.2em; border: solid 1px gray; width: 95% }
+div.smallmenu {
+    padding: 0.2em; border: solid 1px gray; font-size: 1.0em;
+}
+    
+div.groupbar {
+    background-color: transparent;
+    border-collapse: collapse;
+    padding: 0px 0px 0px 0px;
+    white-space: nowrap;
+    list-style: none;
+    margin: 0;
+    height: auto;
+    line-height: normal;
+
+    color: #666666;
+    background-color: #d9c98d;
+    border: 1px solid #c9b97d;
+
+    border-bottom: #d9c98d 1px solid;
+}
+div.groupbar a {
+    background-color: #d9c98d;
+    border-bottom: #d9c98d 1px solid;
+    color: #666666;
+}
+div.groupbar a:hover {
+    background-color: #d9c98d;
+    color: #666666;
+}
+
+div.groupbar table { 
+    border-collapse: collapse;
+    padding: 0px 0px 0px 0px;
+    width: 100%;
+}
+
+div.groupbar table td.grouptitle {
+    color: #666666;
+    background-color: #d9c98d;
+    font-size: 1.2em;    
+}
+div.groupbar table td.groupsections {
+    color: #666666;
+    background-color: #d9c98d;
+    font-size: 1.1em;
+    text-align: right;
+}
+
+div.groupsummary {
+    border-collapse: collapse;
+    padding: 0.5em 0.5em 0.5em 0.5em;
+    /*white-space: nowrap;*/
+    /*list-style: disc;*/
+    /*margin: 0;*/
+    height: auto;
+    line-height: normal;
+
+    border: 1px solid #c9b97d;
+
+    font-size: 0.9em;
+    background-color: white;
+}
+
+div.groupsummary table {
+    border-collapse: collapse;
+    padding: 0em;
+    /*width: 100%;*/
+}
+
+div.groupsummary table td {
+    vertical-align: top;
+    /*width: 50%;*/
+}
+
+/*
+div.groupsummary table td li {
+    font-size: 0.9em;
+}
+*/
+div.bottommenu {
+    border-collapse: collapse;
+    padding: 0em 0em 0em 0em;
+    /*white-space: nowrap;*/
+    list-style: none;
+    margin: 0;
+    height: auto;
+    line-height: normal;
+
+    border: 1px solid #bdd297;
+
+    color: #338800;
+    font-size: 0.9em;
+
+    background-color: white;
+    border-bottom: #bdd297 1px solid;
+}
+
+div.forum-item-info {
+    /* used when forum item info is presented in a list */
+    border-bottom: #bdd297 1px solid;
+}
+
+div.forum-item-heading {
+    /* used when forum item is followed by text */
+}
+div.forum-item-heading .title,
+div.forum-item-heading .readtitle {
+    font-size: 1.2em;
+    font-weight: normal;
+}
+
+div.forum-item-text {
+    border-bottom: #bdd297 1px solid;
+}
+        
+div.tabmenu	{ padding: 0.2em; border: solid 1px gray; }
+div.box		{ padding: 0.2em; border: solid 1px gray; width: 100% }
+
+span.negnum	{ color: red; }
+span.posnum	{ color: green; }
+span.alert	{ color: red; }
+span.info	{ color: green; }
+
+span.seltab { font-weight: bold; }
+span.unseltab { font-weight: normal; }
+
+.banner		{ font-size: 2.0em; font-weight: bold; }
+.note		{ color: olive; font-size: 0.8em; }
+.alert		{ color: red; font-weight: bold; }
+.info		{ color: green; font-weight: bold; }
+.dimtitle	{ font-weight: bold; color: gray; }
+.disabled	{ font-weight: normal; color: silver; }
+.heading	{ font-weight: bold; font-size: 1.6em;}
+.explanation	{ font-size: 0.8em;  }
+
+p.title,
+span.title  { font-weight: bold; }
+span.readtitle { font-weight: normal; }
+p.subtitle,
+span.subtitle	{ font-size: 0.9em; }
+
+.forum-listing .subtitle {
+    font-size: 0.85em;
+}
+
+span.grouptitle { font-size: 1.2em; }
+div.groupsections { float: right; font-size: 1.0em; }
+
+.pagenavigation {
+    text-align: right;
+    float: right;
+    font-size: 50%;
+    margin-left: 1em;
+}
+
+.pagenumbers {
+    font-size: 150%;
+}
+
+.search_header {
+    font-size: 150%;
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;    
+}
+
+.search_document_age {
+    color: #908267;        /* omidyar network logo brown */
+    font-size: 85%;
+    font-weight: normal;
+}
+
+.search_document_age_alert {
+    color: #FF5050;        /* omidyar network logo brown */
+    font-size: 85%;
+    font-weight: normal;
+}
+
+.sortselector {
+    text-align: right;
+    float: right;
+    font-size: 75%;
+    margin-left: 1em;
+}
+
+.email_this_page {
+    text-align: right;
+    float: right;
+    font-size: 100%;
+    margin-left: 1em;
+}    
+
+table.widget {
+    border: 1px solid #bdd297;
+    padding: 4px 8px 4px 0px; /* top right bottom left */
+    font-size: 80%;
+    width: 17em;
+}
+
+table.widgetWide {
+    border: 1px solid #bdd297;
+    padding: 4px 8px 4px 0px; /* top right bottom left */
+    font-size: 80%;
+}
+              
+td.widgetHeader {
+    color: Black;
+    background-color: transparent;
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+    font-weight: bold;
+    font-size: 130%;    
+    margin: 0;
+    vertical-align: top;
+    text-align: left;    
+}
+
+td.widgetBullets {
+    vertical-align: middle;
+    text-align: center;
+    padding: 0px 2px 0px 8px; /* top right bottom left */
+    /* border: 1px solid #ff0000; */ /* debugging */
+}
+              
+td.widgetContents {
+    vertical-align: middle;
+    text-align: left;
+    padding: 0;
+    /* border: 1px solid #ff0000; */ /* debugging */
+}
+
+table.homepage-table {
+    width: 100%;
+    max-width: 1200px;
+}
+
+td.homepage-left-column {
+    /* border: 1px solid #ff0000; */ /* for debugging only */     
+    text-align: left;
+}
+
+td.homepage-right-column {
+    /* border: 1px solid #ff0000; */ /* for debugging only */     
+    text-align: right;
+}
+
+
+.homepage-alerts {
+    text-align: left;
+    font-size: 85%;
+}
+
+.homepage-recently-active {
+    font-size: 85%;
+}
+
+.homepage-welcome-more {
+    display: block;
+    font-size: 85%;
+    text-align: right;
+}
+
+/* quixote form2 css.py */
+form.quixote div.title {
+    font-weight: bold;
+}
+
+form.quixote br.submit,
+form.quixote br.widget,
+br.quixoteform {
+    clear: left;
+}
+
+form.quixote div.submit br.widget {
+    display: none;
+}
+
+form.quixote div.widget {
+    float: left;
+    padding: 4px;
+    padding-right: 1em;
+    margin-bottom: 6px;
+}
+
+/* pretty forms (attribute selector hides from broken browsers (e.g. IE) */
+form.quixote[action] {
+    float: left;
+}
+
+form.quixote[action] > div.widget {
+    float: none;
+}
+
+form.quixote[action] > br.widget {
+    display: none;
+}
+
+form.quixote div.widget div.widget {
+    padding: 0;
+    margin-bottom: 0;
+}
+
+form.quixote div.SubmitWidget {
+    float: left
+}
+
+form.quixote div.content {
+    margin-left: 0.6em; /* indent content */
+}
+
+form.quixote div.content div.content {
+    margin-left: 0; /* indent content only for top-level widgets */
+}
+
+form.quixote div.error {
+    color: #c00;
+    font-size: small;
+    /* Alex: next three lines counteract docutils */
+    margin: .1em 0em 0em 0em;
+    border: none;
+    padding: 0em;
+    /* Alex: next line counteracts plone */
+    background-color: white;
+}
+
+form.quixote div.hint {
+    font-size: small;
+    font-style: italic;
+    /* Alex: next three lines counteract docutils */
+    margin: .1em 0em 0em 0em;
+    border: none;
+    padding: 0em;
+    /* Alex: next line counteracts plone */
+    background-color: white;
+}
+
+form.quixote div.errornotice {
+    color: #c00;
+    padding: 0.5em;
+    margin: 0.5em;
+}
+
+form.quixote div.FormTokenWidget,
+form.quixote.div.HiddenWidget {
+    display: none;
+}

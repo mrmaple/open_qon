@@ -1,0 +1,548 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR ORGANIZATION
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"POT-Creation-Date: Sat May 15 15:32:18 2004\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=ISO-8859-1\n"
+"Content-Transfer-Encoding: ENCODING\n"
+"Generated-By: pygettext.py 1.5\n"
+
+
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:61 ./lib/qon/ui/blocks/blog.ptl:61
+msgid "No items"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:152 ./lib/qon/ui/blocks/blog.ptl:152
+msgid "Posted to:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:162
+#: ./build/lib/qon/ui/blocks/blog.ptl:167 ./lib/qon/ui/blocks/blog.ptl:162
+#: ./lib/qon/ui/blocks/blog.ptl:167
+msgid "by"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:175
+#: ./build/lib/qon/ui/blocks/blog.ptl:260
+#: ./build/lib/qon/ui/blocks/blog.ptl:300 ./lib/qon/ui/blocks/blog.ptl:175
+#: ./lib/qon/ui/blocks/blog.ptl:260 ./lib/qon/ui/blocks/blog.ptl:300
+msgid "Edited:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:185 ./lib/qon/ui/blocks/blog.ptl:185
+msgid "Comments:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:195
+#: ./build/lib/qon/ui/blocks/blog.ptl:199 ./lib/qon/ui/blocks/blog.ptl:195
+#: ./lib/qon/ui/blocks/blog.ptl:199
+msgid "(most recent: %s by"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:225 ./lib/qon/ui/blocks/blog.ptl:225
+msgid "Read more..."
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:230
+#: ./build/lib/qon/ui/blocks/blog.ptl:281 ./lib/qon/ui/blocks/blog.ptl:230
+#: ./lib/qon/ui/blocks/blog.ptl:281
+msgid "Comment"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:233 ./lib/qon/ui/blocks/blog.ptl:233
+msgid "on"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:249 ./lib/qon/ui/blocks/blog.ptl:249
+msgid "By"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:283 ./lib/qon/ui/blocks/blog.ptl:283
+msgid " on"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:287 ./lib/qon/ui/blocks/blog.ptl:287
+msgid " by"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:294 ./lib/qon/ui/blocks/blog.ptl:294
+msgid "Posted to: "
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:340 ./lib/qon/ui/blocks/blog.ptl:340
+msgid "Group not found:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/blog.ptl:351 ./lib/qon/ui/blocks/blog.ptl:351
+msgid "No permission to read group %s. The author of this page wants to include content from a group you don't have permission to read."
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:219 ./lib/qon/ui/blocks/util.ptl:219
+msgid "You are here:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:258 ./lib/qon/ui/blocks/util.ptl:258
+msgid "Who's Online"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:303 ./lib/qon/ui/blocks/util.ptl:303
+msgid "My Watch List"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:331 ./lib/qon/ui/blocks/util.ptl:331
+msgid "Footprints"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:353 ./lib/qon/ui/blocks/util.ptl:353
+msgid "Stop watching"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:355
+#: ./build/lib/qon/ui/blocks/util.ptl:357 ./lib/qon/ui/blocks/util.ptl:355
+#: ./lib/qon/ui/blocks/util.ptl:357
+msgid "Watch"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:366 ./lib/qon/ui/blocks/util.ptl:366
+msgid "Help on: %s"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:367 ./lib/qon/ui/blocks/util.ptl:367
+msgid "Help"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:374 ./lib/qon/ui/blocks/util.ptl:374
+msgid "Help on this page"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:456 ./lib/qon/ui/blocks/util.ptl:456
+msgid "Unpublished proprietary work. Unauthorized access prohibited. "
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:457 ./lib/qon/ui/blocks/util.ptl:457
+msgid "If you think you don't belong here, you probably don't."
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:459 ./lib/qon/ui/blocks/util.ptl:459
+msgid "Copyright &copy; 2004, Omidyar Network LLC. All rights reserved. "
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:461 ./lib/qon/ui/blocks/util.ptl:461
+msgid "Use of this site constitutes acceptance of our soon-to-be defined Terms and Conditions. "
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:464 ./lib/qon/ui/blocks/util.ptl:464
+msgid "WARNING:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:466 ./lib/qon/ui/blocks/util.ptl:466
+msgid "This site is under active development and construction. "
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:467 ./lib/qon/ui/blocks/util.ptl:467
+msgid "There is severe risk of data loss <del>at any time</del> seemingly at random. Use at your own risk."
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:478 ./lib/qon/ui/blocks/util.ptl:478
+msgid "From here:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:538 ./lib/qon/ui/blocks/util.ptl:538
+msgid "Tips:"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:557 ./lib/qon/ui/blocks/util.ptl:557
+msgid "E-mail address"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:558 ./lib/qon/ui/blocks/util.ptl:558
+msgid "Password"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:559 ./lib/qon/ui/blocks/util.ptl:559
+msgid "Sign in"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:573 ./lib/qon/ui/blocks/util.ptl:573
+msgid "Please enter an e-mail address."
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:581 ./lib/qon/ui/blocks/util.ptl:581
+msgid "Invalid e-mail address"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:584 ./lib/qon/ui/blocks/util.ptl:584
+msgid "You must enter a password"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:587 ./lib/qon/ui/blocks/util.ptl:587
+msgid "Invalid username or password."
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:607 ./lib/qon/ui/blocks/util.ptl:607
+msgid "New user?"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:609 ./lib/qon/ui/blocks/util.ptl:609
+msgid "Forgot password?"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:625 ./lib/qon/ui/blocks/util.ptl:625
+msgid "See"
+msgstr ""
+
+#: ./build/lib/qon/ui/blocks/util.ptl:629 ./lib/qon/ui/blocks/util.ptl:629
+msgid "for tips on making your page easy to read."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:31 ./build/lib/qon/ui/group/group.ptl:40
+#: ./build/lib/qon/ui/group/group.ptl:78 ./lib/qon/ui/group/group.ptl:31
+#: ./lib/qon/ui/group/group.ptl:40 ./lib/qon/ui/group/group.ptl:78
+msgid "Create a new group"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:33 ./build/lib/qon/ui/group/group.ptl:95
+#: ./lib/qon/ui/group/group.ptl:33 ./lib/qon/ui/group/group.ptl:95
+msgid "Pending groups"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:34
+#: ./build/lib/qon/ui/group/group.ptl:126 ./lib/qon/ui/group/group.ptl:34
+#: ./lib/qon/ui/group/group.ptl:126
+msgid "New groups"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:35 ./lib/qon/ui/group/group.ptl:35
+msgid "Group index"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:41 ./lib/qon/ui/group/group.ptl:41
+msgid "List all groups awaiting sponsorship"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:42 ./lib/qon/ui/group/group.ptl:42
+msgid "List groups recently formed"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:43 ./lib/qon/ui/group/group.ptl:43
+msgid "List all groups"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:46 ./build/lib/qon/ui/group/group.ptl:56
+#: ./build/lib/qon/ui/group/group.ptl:75 ./lib/qon/ui/group/group.ptl:46
+#: ./lib/qon/ui/group/group.ptl:56 ./lib/qon/ui/group/group.ptl:75
+msgid "Groups"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:47 ./lib/qon/ui/group/group.ptl:47
+msgid "Group Browser"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:63 ./lib/qon/ui/group/group.ptl:63
+msgid "My groups"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:68 ./lib/qon/ui/group/group.ptl:68
+msgid "All groups"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:101 ./lib/qon/ui/group/group.ptl:101
+msgid "Groups which are still awaiting a co-sponsor."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:111 ./lib/qon/ui/group/group.ptl:111
+msgid "All active groups"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:117 ./lib/qon/ui/group/group.ptl:117
+msgid "Listed alphabetically. Does not include groups still pending."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:132 ./lib/qon/ui/group/group.ptl:132
+msgid "These groups have been formed and sponsored in the last week."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:152 ./lib/qon/ui/group/group.ptl:152
+msgid "Formed:"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:195 ./lib/qon/ui/group/group.ptl:195
+msgid "Forums"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:196 ./lib/qon/ui/group/group.ptl:196
+msgid "Workspace"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:197 ./lib/qon/ui/group/group.ptl:197
+msgid "Files"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:202 ./lib/qon/ui/group/group.ptl:202
+msgid "Group discussions"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:203 ./lib/qon/ui/group/group.ptl:203
+msgid "Group collaboration pages"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:204 ./lib/qon/ui/group/group.ptl:204
+msgid "Group files and folders"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:206 ./lib/qon/ui/group/group.ptl:206
+msgid "Group"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:211 ./lib/qon/ui/group/group.ptl:211
+msgid "Invite"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:213 ./lib/qon/ui/group/group.ptl:213
+msgid "Leave"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:215 ./lib/qon/ui/group/group.ptl:215
+msgid "Settings"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:219 ./lib/qon/ui/group/group.ptl:219
+msgid "Invite new users to join this group"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:220 ./lib/qon/ui/group/group.ptl:220
+msgid "Cancel your membership in this group"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:221 ./lib/qon/ui/group/group.ptl:221
+msgid "Adjust this group's settings"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:224 ./lib/qon/ui/group/group.ptl:224
+msgid "Delete"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:225 ./lib/qon/ui/group/group.ptl:225
+msgid "Delete this group"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:228 ./lib/qon/ui/group/group.ptl:228
+msgid "Staff access only"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:229 ./lib/qon/ui/group/group.ptl:229
+msgid "Double secret probation access"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:230 ./lib/qon/ui/group/group.ptl:230
+msgid "About"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:231 ./lib/qon/ui/group/group.ptl:231
+msgid "Show detailed information about this group and and its owners and members."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:235 ./lib/qon/ui/group/group.ptl:235
+msgid "This group"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:236 ./lib/qon/ui/group/group.ptl:236
+msgid "Group Tools"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:331 ./lib/qon/ui/group/group.ptl:331
+msgid "You are not signed in."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:335 ./lib/qon/ui/group/group.ptl:335
+msgid "Member groups of"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:384 ./lib/qon/ui/group/group.ptl:384
+msgid "Are you sure you want to leave this group?"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:390 ./lib/qon/ui/group/group.ptl:390
+msgid "The following groups, of which you are the only owner who is a member of this group, will also leave this group."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:392 ./lib/qon/ui/group/group.ptl:392
+msgid "These groups will also leave"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:397 ./lib/qon/ui/group/group.ptl:397
+msgid "You have left the group."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:399 ./lib/qon/ui/group/group.ptl:399
+msgid "You are not a member of this group."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:407 ./lib/qon/ui/group/group.ptl:407
+msgid "Sorry, this feature is not available until this group is active."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:412 ./lib/qon/ui/group/group.ptl:412
+msgid "Invite users into group"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:418 ./lib/qon/ui/group/group.ptl:418
+msgid "Owner:"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:418 ./lib/qon/ui/group/group.ptl:418
+msgid "Use this form to invite other users into this group. "
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:419 ./lib/qon/ui/group/group.ptl:419
+msgid "Enter a list of e-mail addresses separated by spaces or one on each line."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:421 ./lib/qon/ui/group/group.ptl:421
+msgid "The following users have been invited to join this group:"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:449 ./lib/qon/ui/group/group.ptl:449
+msgid "Once you delete this group, it cannot be recovered."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:450 ./lib/qon/ui/group/group.ptl:450
+msgid "Your group has been deleted."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:452 ./lib/qon/ui/group/group.ptl:452
+msgid "You cannot delete a group once it is active."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:462 ./lib/qon/ui/group/group.ptl:462
+msgid ""
+"This page allows you to control all aspects of your group, including its\n"
+"        name, description, owners, and membership policies. You can also select other groups to\n"
+"        associate with."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:470 ./lib/qon/ui/group/group.ptl:470
+msgid "Preview your changes and make any necessary corrections below."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:471 ./lib/qon/ui/group/group.ptl:471
+msgid "Your changes have been recorded."
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:533 ./lib/qon/ui/group/group.ptl:533
+msgid ""
+"            \n"
+"<p>\n"
+"    Create a new group to:\n"
+"    <ul>\n"
+"        <li>Be a home to your organization or workgroup, or</li>\n"
+"        <li>Be a place to collaborate around issues that don't have an appropriate home elsewhere</li>\n"
+"    </ul>\n"
+"</p>\n"
+"<p>\n"
+"    Creating a group here is different than what you might be used to.\n"
+"    In order for your new group to be accepted, it must be co-sponsored by another member.\n"
+"    Co-sponsoring is as simple as visiting your pending group's home page and clicking a button.\n"
+"    Your new group will not become active until another member co-sponsors it.\n"
+"</p>\n"
+"<p>\n"
+"    When creating a group, you need to select a <cite>short name</cite>, which will become part\n"
+"    of your group's web address. This can never be changed, so please choose carefully. For instance,\n"
+"    if you select <cite>example</cite> as your group's short name, its web address will be:\n"
+"    <cite>http://www.omidyar.net/group/example/</cite>\n"
+"</p>\n"
+msgstr ""
+
+#: ./build/lib/qon/ui/group/group.ptl:555 ./lib/qon/ui/group/group.ptl:555
+msgid ""
+"\n"
+"<p class=\"info\">\n"
+"    Your group has been created, and is now awaiting a co-sponsor before becoming active.\n"
+"</p>\n"
+"<p>\n"
+"    Remember, in order for your group to become active, another member must visit its home\n"
+"    page and click a button to co-sponsor the group. Your group's home page is:\n"
+"</p>\n"
+"<blockquote>%s</blockquote>\n"
+msgstr ""
+
+#: ./build/lib/qon/ui/home.ptl:114 ./lib/qon/ui/home.ptl:106
+msgid "<p class=\"explain\">Groups you are a member of, with most recently-updated groups on top.</p>"
+msgstr ""
+
+#: ./build/lib/qon/ui/home.ptl:142 ./lib/qon/ui/home.ptl:134
+msgid ""
+"\n"
+"<p>\n"
+"    <span class=\"topheading\">Welcome to omidyar.net!</span><br />\n"
+"    Here you can:\n"
+"    <ul>\n"
+"        <li>Participate in group discussions and collaboration on a wide variety of topics, and</li>\n"
+"        <li>Create a home for your organization where you can collaborate and communicate with others</li>\n"
+"    </ul>\n"
+"</p>\n"
+"<p>\n"
+"    (See the <a href=\"/group/on/\">Omidyar Network</a> group to learn more about us.)\n"
+"</p>\n"
+"<p>\n"
+"    Getting around is easy. At the <em>top</em> of your screen is the\n"
+"    <cite>You are here</cite> section, which will always tell you where\n"
+"    you are as you move around the site, and let you jump back to areas\n"
+"    you just visited. You'll also find a menu bar on the top of your screen\n"
+"    that will give you options relevant to the particular screen you're on.\n"
+"</p>\n"
+"<p>    \n"
+"    On the <em>left</em> of your screen, there's a box that will keep\n"
+"    track of your footprints as you visit pages of interest. On the left\n"
+"    you'll also see your <cite>Watch List</cite>, where you can keep\n"
+"    track of items you're most interested in -- look for a\n"
+"    <cite>Watch</cite> menu item in the menu bar as you move throughout\n"
+"    the site. (Both of these options are only available once you are\n"
+"    signed in.)\n"
+"</p>\n"
+"<p>\n"
+"    Now, take a look below for groups that have their home here. Then,\n"
+"    <a href=\"/user/new\">sign up</a> as a new user to start contributing!\n"
+"</p>\n"
+msgstr ""
+
+#: ./build/lib/qon/ui/messages.py:54 ./lib/qon/ui/messages.py:54
+msgid "omidyar.net"
+msgstr ""
+
+#: ./build/lib/qon/util.py:94 ./lib/qon/util.py:94
+msgid "%s days ago"
+msgstr ""
+
+#: ./build/lib/qon/util.py:96 ./lib/qon/util.py:96
+msgid "yesterday"
+msgstr ""
+
+#: ./build/lib/qon/util.py:101 ./lib/qon/util.py:101
+msgid "%s hours ago"
+msgstr ""
+
+#: ./build/lib/qon/util.py:103 ./lib/qon/util.py:103
+msgid "1 hour ago"
+msgstr ""
+
+#: ./build/lib/qon/util.py:107 ./lib/qon/util.py:107
+msgid "%s minutes ago"
+msgstr ""
+
+#: ./build/lib/qon/util.py:109 ./lib/qon/util.py:109
+msgid "1 minute ago"
+msgstr ""
+
+#: ./build/lib/qon/util.py:111 ./lib/qon/util.py:111
+msgid "%s seconds ago"
+msgstr ""
+

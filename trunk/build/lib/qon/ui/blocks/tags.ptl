@@ -1,0 +1,489 @@
+"""
+$Id: tags.ptl,v 1.22 2007/06/28 14:43:59 jimc Exp $
+:Author: Jim Carroll
+"""
+__pychecker__ = "no-noeffect"
+
+from datetime import datetime, timedelta
+import math
+
+from quixote.html import href, htmlescape, htmltext, url_quote
+from dulcinea.ui.util import li
+from qon.base import get_user, get_group_database
+from qon.util import url_quote_no_slashes, pad_list, pad_lists, sort_list, unique_items, get_oid
+from qon.util import xml_escape, format_ago
+from qon.user import User
+import qon.ui.blocks.blog
+import qon.ui.blocks.util
+from qon.blog import BlogItem
+from qon.wiki import Wiki, WikiPage
+from qon.base import get_tagged_item_database, get_tags_database, get_user_database
+from dulcinea.database import unpack_oid, pack_oid
+
+#from qon.search import uglystuff
+import re
+uglystuff = re.compile('[*+=~]{2,}|[-]{3,}|\.\. .+?(\Z|\n)|__ .+?(\Z|\n)|:\w+: \w+(\Z|\n)|::|[_`\|]+')
+
+def suggested_tags (item, user, group=None):
+    if user:
+        user_id = user.get_user_id()
+    else:
+        user_id = None
+
+    suggested = []
+    
+    tidb = get_tagged_item_database()
+    users_item_tags = tidb.get_tags(item._p_oid, user_id)
+    suggested.extend([tag for tag in tidb.get_tags(item._p_oid) if tag not in users_item_tags])
+
+    if hasattr(item, str('parent_blogitem')) and item.parent_blogitem:
+        suggested.extend([tag for tag in tidb.get_tags(item.parent_blogitem._p_oid) if tag not in suggested])
+
+    return suggested
+
+def edit_and_current [html] (item, group=None, in_place=True):
+
+    tidb = get_tagged_item_database()
+    item_current_tags = tidb.get_tags(item._p_oid)
+    user = None
+    if get_user():
+        user = get_user().get_user_id()
+
+    users_item_tags = tidb.get_tags(item._p_oid, user)
+    suggested = suggested_tags(item, get_user())
+
+    item_oid = unpack_oid(item._p_oid)
+    field_id = "tag_text_%i" % item_oid
+    form_id = "tag_form_%i" % item_oid
+    tools_area_id = "tag_current_%i" % item_oid
+    if in_place:
+        tag_form_class = 'tag_form'
+        tag_submit_class = 'tag_submit'
+    else:
+        tag_form_class = 'tag_form_regular'
+        tag_submit_class = 'tag_submit_regular'
+
+    # if they have tagged this item, show their tags and let them edit them
+    if users_item_tags or not in_place:
+        """
+        <A HREF='/my/tags/'>my tags</A>:
+        <form action="./_tag" class="%s" id="%s" style="display: inline;" METHOD="POST">
+          <input type="hidden" name="item_oid" value="%s">
+          <input type="text" class="tag_input" id="%s" tools_id="%s" name="tags" size="45" value="%s">
+          <input value="Save Tags" class="tag_submit" type="submit">
+        """ % (tag_form_class, form_id, item_oid, field_id, tools_area_id, " ".join(users_item_tags))
+        '<div id="%s" class="tag_tools hidden">' % tools_area_id
+    
+        if suggested:
+            'suggested tags: (click to copy) '
+            """<span class="mini-cloud">"""
+            for tag in suggested:
+                """<A class="tag" HREF="javascript:appendToTextInput('%s', '%s');">%s</A> """ % (tag, field_id, tag)
+            """</span>"""
+        else:
+            "suggested tags: (no suggestions)"
+        """<div class="formHelp">
+        Help with tagging is available in the 
+        <A HREF="/group/tagging_sandbox/ws/tagging_faq/">Tagging FAQ</A>.</div>"""
+        '</div>'
+        "</form>"
+    else:
+        # show 'tag this'  and let it expand to show everything
+        tag_form_class += " hidden"
+        """
+        <A HREF="javascript:tagThis(%s)" class="tag_this" id="tag_this_%s">tag this</A>
+        <form action="./_tag" class="%s" id="%s" METHOD="POST">
+        <A HREF='/my/tags/'>my tags</A>:
+          <input type="hidden" name="item_oid" value="%s">
+          <input type="text" class="tag_input" id="%s" tools_id="%s" name="tags" size="45" value="%s">
+          <input value="Save Tags" class="tag_submit" type="submit"><br/>
+        """ % (item_oid, item_oid, tag_form_class, form_id, item_oid, field_id, tools_area_id, "")
+        '<div id="%s" class="tag_tools hidden">' % tools_area_id
+
+        if suggested:
+            'suggested tags: (click to copy) '
+            """<span class="mini-cloud">"""
+            for tag in suggested:
+                """<A class="tag" HREF="javascript:appendToTextInput('%s', '%s');">%s</A> """ % (tag, field_id, tag)
+            """</span>"""
+        else:
+            "suggested tags: (no suggestions)"
+        """<div class="formHelp">
+        Help with tagging is available in the 
+        <A HREF="/group/tagging_sandbox/ws/tagging_faq/">Tagging FAQ</A>.</div>"""
+        '</div>'
+        "</form>"
+    #
+
+def color_interpolator (ratio, color1, color2):
+    """ ratio close to zero will be like color1
+    ratio closer to 1.0 will be more like color2
+    """
+    ratio = min(max( 0.0, ratio), 1.0)
+    r1, g1, b1 = color1
+    r2, g2, b2 = color2
+    one_minus_ratio = 1.0 - ratio
+    r = r1 * one_minus_ratio + r2 * ratio
+    g = g1 * one_minus_ratio + g2 * ratio
+    b = b1 * one_minus_ratio + b2 * ratio
+    return (r, g, b)
+
+def web_color (color):
+    return str("#%02X%02X%02X") % (color)
+
+def cloud [html] (tags_n_counts, container, path_prefix="./tags/", mini_cloud=False, item_id=None):
+
+    # Lars's colors: cc9900-669933  yellowish to greenish
+    unpopular_color = (0xCC, 0x99, 0x00)
+    #popular_color = (0x66, 0x99, 0x33)
+    popular_color = (0x33, 0x66, 0x00) # regular link color
+
+    max_count = max([count for tag, count in tags_n_counts])
+    min_count = min([count for tag, count in tags_n_counts])
+    if min_count == max_count:
+        max_count += 1
+    tags_n_counts.sort()
+    tag_db = get_tags_database()
+
+    cloud_id_attribute = ""
+    if item_id:
+        cloud_id_attribute = ' id="cloud_%s' % item_id
+
+    if mini_cloud:
+        """<span class="mini-cloud"%s>""" % cloud_id_attribute
+    else:
+        """<div class="tag-cloud"%s>""" % cloud_id_attribute
+    for tag, count in tags_n_counts:
+        if min_count == max_count:
+            zero_to_one = 0.9
+        else:
+            zero_to_one = (count - min_count) / float(max_count - min_count)
+        #
+
+        # log-like
+        zero_to_one = math.sqrt(zero_to_one)
+
+        color = web_color(color_interpolator(zero_to_one, unpopular_color, popular_color))
+        #color = popular_color
+
+        if mini_cloud:
+            size = "%0.1fem" % (zero_to_one * 0.3 + 1.0)
+        else:
+            size = "%0.1fem" % (zero_to_one * 0.8 + 1.0)
+
+        # first do the usual url quote for the tag
+        tag_url = url_quote(tag)
+
+        url = str("%s%s") % (path_prefix, tag_url)
+
+        attrs = {str("class"):str("tag"), str("style"): str("font-size:%s; color:%s"% (size,color))}
+        link = href(url, tag, tag, **attrs)
+        # show each tag, with extra space
+        "%s " % link
+    #   
+    if mini_cloud:
+        """</span>"""
+    else:
+        """</div>"""
+# 
+# 
+def create_item_summary (item):
+    summary = ""
+
+    # if this is a comment
+    if type(item) is qon.blog.BlogItem and type(item.blog.ihb) is qon.group.Group:
+        # filter out ugly stuff like directives and ------, ======, etc...
+        summary = item.get_summary() or ''
+        # print summary
+        #preview = summary
+        preview = uglystuff.sub(str(''), summary)
+        if len(preview) > 250:
+            summary = preview[:250] + "..."
+    return summary
+
+def tagged_items_table [html] (item_oids, specific_tags=None, public_items = True):
+    #''' Shows the items tagged with a particular tag.  If spcefiic tags are specified,
+    #then it only considers usersr who have used that specific tag.  If we want to
+    #show public_items, then naughty taggers are supressed, and we show the popularity.'''
+
+    tidb = get_tagged_item_database()
+
+    item_data = []
+    for item_oid in item_oids:
+        popularity = tidb.get_item_popularity(item_oid, specific_tags)
+        item = get_oid(item_oid)
+        if type(item) == User:
+            date = item.last_login
+        else:
+            date = item.watchable_modified_date()
+        by_whom = tidb.get_item_taggers(item_oid, specific_tags)
+        if not public_items or popularity > 0 :
+            item_data.append([popularity, date, item_oid, item, by_whom])
+    item_data.sort()
+    item_data.reverse()
+
+    for popularity, date, item_oid, item, by_whom in item_data:
+        '<dt>'
+        qon.ui.blocks.util.fancy_one_line_display (item, dont_bold = False, alt_href=None)
+        '</dt>'
+
+        summary = create_item_summary(item)
+        if summary:
+            '<dd><span class="preview">'
+            summary
+            '</span></dd>'
+        #
+
+        # show who this has been tagged by
+        '<dd><span class="discreet">'
+
+        'Updated %s' % format_ago(date)
+
+        if public_items:
+            taggers = []
+            for user_id in by_whom:
+                user = get_user_database().get_user(user_id)
+                name = user.display_name()
+                path = '/user/%s/' % user.get_user_id()
+                link = '<A HREF="%s">%s</A>' % (path, name)
+                taggers.append(link)
+            #
+            
+            if taggers:
+                num_to_show = 6
+                who = ", ".join(taggers[:num_to_show])
+                ', Tagged by: %s' % (who)
+                if len(taggers) > num_to_show:
+                    desc += " and %i more" % (len(taggers) - num_to_show)
+                #
+            #
+        #
+        '</span></dd>'
+        '<br />'
+    #
+
+def junk ():
+    for date, item_oid, tags in items_tagged:
+        item = get_oid(item_oid)
+        desc = qon.ui.blocks.util.fancy_one_line_display (item, dont_bold = False, alt_href=None)
+        '<dt>'
+        desc
+        '</dt>'
+        '<dd>'
+        '<span class="discreet">'
+        'Tagged %s with <span style="color:#404040">%s</span>' % (format_ago(date), ", ".join(tags))
+        '</span>'
+        '</dd>'
+        '<br />'
+    #
+
+def user_tag_cloud [html](user):
+    title = "ned.com: Personal Tags"
+    blocks.util.header(request, title)
+    '''
+    <h1>Personal Tags</h1>
+    <p class="formHelp">
+    Displays the tags that this person has applied to items site-wide.
+    </p>
+    '''
+    tags_n_counts = user.get_tags_n_counts()
+    #"%i tags<br />" % len(tags_n_counts)
+
+    if tags_n_counts:
+        blocks.tags.cloud(tags_n_counts, user, './')
+    else:
+        "This person hasn't applied any tags yet."
+
+    blocks.util.footer()
+
+# karma originally came from ui.blocks.user, but are
+# modified here for use during tagging feedback.
+# Tagging feedback uses the Karma bank of the user
+# but substitutes the user.tag_karma for the user's 
+# mixed-in karma.
+def karma [html] (user, path=None, show_title=1, show_control=1, title='Feedback score',
+    show_stars=0, show_feedbacklist=0, acting_user=None):
+    if not hasattr(user.tag_karma, str('get_karma_score')):
+        return ''
+        
+    cur_user = get_user()
+    if acting_user:
+        # this is used in some admin functions
+        cur_user = acting_user
+        
+    # if user is a HasKarmaBank, display the bank balance
+    if isinstance(user, qon.karma.HasKarmaBank):
+        title = 'Feedback positive/negative/bank'
+        score = '+%d/-%d/%d' % (
+            user.tag_karma.karma_plus_received(),
+            user.tag_karma.karma_minus_received(),
+            user.get_karma_bank_balance(),
+            )
+    # if user has an implied score (like Groups)
+    elif hasattr(user, str('get_karma_score')):
+        score_num = user.tag_karma.get_karma_score()
+        score = '%d' % score_num
+    else:
+        score_num = 0
+        score = '0'
+
+    if show_title:
+        '<span class="title">%s: </span>' % title
+        
+    # display the score
+    if show_feedbacklist:
+        href("%sfeedbacklist" % path, score)
+    else:
+        score
+    
+    # show stars
+    if show_stars and score_num > 0:
+        if score_num > 10:
+            score_num = 10
+        ''' (<span style="background-color: yellow;">'''
+        ' '.join(str('*') * score_num)
+        '''</span>)'''
+    
+    # if user is a HasKarma, provide +/- feedback control
+    if show_control and isinstance(user, qon.karma.HasKarma) and user.can_get_karma_from(cur_user):
+        ' '
+        # href('%sfeedback' % (path or qon.ui.blocks.util.path_to_obj(user)), '+/-')
+        path = path or qon.ui.blocks.util.path_to_obj(user)
+        href('%s_f_p' % path, '+', title="Give positive feedback")
+        '|'
+        href('%s_f_n' % path, '-', title="Give negative feedback")
+        
+        
+    # if browsing user can give karma, and user isn't the browsing user,
+    # and user knows how to respond to karma_points_from, display
+    # karma points from cur_user
+    if isinstance(cur_user, qon.karma.HasKarma) and user.can_get_karma_from(cur_user):
+        if hasattr(user.tag_karma, str('karma_points_from')):
+            # e.g. Groups don't have karma_points_from, but they do have get_karma_score
+            ' (net %s from me)' % user.tag_karma.karma_points_from(cur_user)
+        
+def karma_people [html] (user, count=10):
+    title = 'Positive tagging feedback from: '
+    '<span class="title">%s</span>' % title
+    karma_givers = [u for karma, u in user.tag_karma.positive_karma_givers()]
+    num_givers = len(karma_givers)
+
+    if karma_givers:
+        #list(get_user_database().get_users(karma_givers[:count]))
+        if num_givers > count:
+            if count:
+                ', '
+                href('./feedbacklist', 'and %d more...' % (num_givers - count))
+            else:
+                href('./feedbacklist', '%d %s' % (num_givers, qon.ui.blocks.util.person_plural(num_givers)))
+    else:
+        '0 people.'
+    
+def karma_negative_people [html] (user, threshold=qon.karma.show_neg_threshold, count=10):
+    title = 'Negative tagging feedback from: '
+    '<span class="title">%s</span>' % title
+    karma_givers = user.tag_karma.negative_karma_givers()
+    num_givers = len(karma_givers)
+    
+    # will any exceed threshold of visibility?
+    display_givers = []
+    for karma, user_id in karma_givers:
+        if karma <= threshold:
+            display_givers.append(user_id)
+    
+    people = qon.ui.blocks.util.person_plural(num_givers)
+
+    if display_givers:
+        if count:
+            if num_givers == 1:
+                '''1 person: '''
+            else:
+                '''%d %s, including: ''' % (num_givers, people)
+        
+            # display users
+            list(get_user_database().get_users(display_givers[:count]))
+        
+        num_display = len(display_givers)
+        if num_display > count:
+            if count:
+                ', '
+                href('./negfeedbacklist', 'and %d more...' % (num_display - count))
+            else:
+                href('./negfeedbacklist', '%d %s' % (num_givers, qon.ui.blocks.util.person_plural(num_givers)))
+        
+    else:
+        '''%d %s.''' % (num_givers, people)
+    
+class TagsRssUI:
+    _q_exports = []
+    def __init__ (self, tag_container, tags, feed_url):
+        tags = tags.split(str(','))
+        self.tags = tags
+        self.container = tag_container
+        self.feed_url = feed_url
+
+        self.dates_n_items = self.container.get_recently_tagged(tags, 25)
+        if self.dates_n_items:
+            self.most_recent = self.dates_n_items[0][0]
+
+    def _q_lookup(self,request, component):
+        if 'atom.xml' in component:
+            return self.rss_tags_summary(request)
+        elif 'atom_full.xml' in component:
+            return self.rss_tags_full(request)
+
+    def rss_tags_summary [html] (self, request):
+        feed = qon.atom.Feed()
+        tags_str = ", ".join(self.tags)
+        feed.title = "ned.com items recently tagged %s" % tags_str
+        feed.url = qon.ui.blocks.util.full_url(self.feed_url)
+
+        if self.dates_n_items:
+            feed.set_modified(self.most_recent)
+        else:
+            # what we show when there are no items tagged with these tags
+            pass
+
+        for date, item_oid, user_id in self.dates_n_items:
+            #entry = _create_page_entry(page, add_group_title)
+            item = get_oid(item_oid)
+            path_to_item = qon.ui.blocks.util.full_url(qon.ui.blocks.util.path_to_obj(item))
+            print "the path to the rss is: ", path_to_item
+            entry = qon.atom.Entry(path_to_item)
+            entry.title = xml_escape(qon.ui.blocks.util.formatted_display_name_plain(item))
+            entry.url = path_to_item
+            entry.feed = path_to_item + 'atom.xml'
+            entry_feed_title = "entry_title"
+            entry.id = qon.ui.blocks.util.atom_id(item)
+            entry.set_modified(date)
+            entry.set_issued(date)
+	    if type(item) is qon.blog.BlogItem:
+                entry.set_created(item.date)
+            else:
+                entry.set_created(item.watchable_last_change())
+
+            if hasattr(item, str('author')):
+                author = qon.atom.Person(xml_escape(item.author.display_name()))
+                author.url = qon.ui.blocks.util.full_url(qon.ui.blocks.user.path_to_user(item.author))
+                entry.author = author
+
+            tagged_by_user = get_user_database().get_user(user_id)
+            tagger = qon.ui.blocks.user.display_name_plain(tagged_by_user)
+            tagged_when = qon.ui.blocks.util.format_datetime_short(date)
+            summary = create_item_summary(item)
+            if summary:
+                summary = "&lt;br&gt;&lt;br&gt;" + xml_escape(summary)
+            entry.content = "tagged by %s on %s %s" % (tagger, tagged_when, summary)
+            #xml_escape(page.get_cached_html2())
+
+            feed.entries.append(entry)
+        #
+        
+        # turn the feed into html
+        return feed.output()
+    #
+
+    def rss_tags_full [html] (self, request):
+        'Yeah baby, full rss tags!'
+
+

@@ -1,0 +1,272 @@
+"""
+$Id: form.ptl,v 1.31 2005/05/03 19:35:49 alex Exp $
+"""
+__pychecker__ = "no-noeffect unusednames=request"
+
+from persistent.mapping import PersistentMapping
+from quixote import get_session
+from quixote.form2 import Form
+import qon.ui.blocks.util
+from quixote.form2.widget import Widget, HiddenWidget, SubmitWidget
+from quixote.html import  htmltag
+
+class HiddenWidgetNoEscape(Widget):
+    """
+    Instance attributes:
+      value : string
+    """
+
+    def set_error(self, error):
+        if error is not None:
+            raise TypeError, 'error not allowed on hidden widgets'
+
+    def render(self):
+        if self.value is None:
+            value = None
+        else:
+            value = self.value
+        return htmltag("input", xml_end=True,
+                       type="hidden",
+                       name=self.name,
+                       value=value,
+                       **self.attrs)
+
+class QonForm(Form):
+    """Base class for Qon forms."""
+    
+    submit_button = None
+    cancel_button = None
+    submit_buttons = None
+    
+    def __init__(self, enctype=None):
+        Form.__init__(self, enctype=enctype, use_tokens=False)
+        """Init the form. Don't use form tokens unless there's a good reason:
+        they are recorded in the session and result in a db write.
+        """
+        
+    def mangle(self, name):
+        return '_' + self.__class__.__name__ + '__' + name
+
+    def validate(self):
+        if not self.is_submitted():
+            return False
+        if not self.get_submit() in self.submit_buttons:
+            return False
+            
+        if hasattr(self, 'cancel_button') and (self.get_submit() == self.cancel_button):
+            return True
+            
+        if self.has_errors():
+            return False
+        return True
+        
+    def escape_html(cls, s):
+        """Class utility method to escape html from user input."""
+        from xml.sax.saxutils import escape
+        if s:
+            return escape(s)
+        else:
+            return s
+    escape_html = classmethod(escape_html)
+
+    def render(self):
+        return Form.render(self)
+    
+    def _create_session_var(self):
+        session = get_session()
+        if not hasattr(session, '_qon_forms'):
+            session._qon_forms = PersistentMapping()
+        
+    def write_session(self, form_class=None):
+        """Write form vars in session for reference by another form."""
+        if not form_class:
+            form_class = self.__class__
+            
+        form_name = form_class.__name__
+
+        session = get_session()
+        vars = {}
+        for widget in self.get_all_widgets():
+            # note you have to use parse() here to get the widget value
+            vars[widget.name] = widget.parse()
+        
+        self._create_session_var()
+        session._qon_forms[form_name] = PersistentMapping(vars)
+    
+    def read_session(self, form_class=None):
+        """Read form vars out of session and set form values."""
+        if not form_class:
+            form_class = self.__class__
+            
+        form_name = form_class.__name__
+        
+        self._create_session_var()
+        vars = get_session()._qon_forms.get(form_name, {})
+        
+        for k,v in vars.iteritems():
+            widget = self.get_widget(k)
+            
+            if widget:
+                # workaround/hack: must access widget value
+                # one time for it to be "parsed." Otherwise,
+                # the first access will attempt to get the
+                # widget's value from a posted form. Also
+                # must clear error on the widget
+                widget.parse()
+                if hasattr(widget, 'clear_error'):
+                    widget.clear_error()
+                else:
+                    widget.error = None
+                widget.set_value(v)
+        return vars
+
+    def clear_session(self, form_class=None):
+        """Remove any saved form vars."""
+        if not form_class:
+            form_class = self.__class__
+            
+        form_name = form_class.__name__
+        
+        session = get_session()
+        self._create_session_var()
+        if session._qon_forms.has_key(form_name):
+            del session._qon_forms[form_name]
+    
+    """ Overrode add and add_hidden so that we can use HiddenWidgetNoEscape """
+    def add(self, widget_class, name, *args, **kwargs):
+        if self._names.has_key(name):
+            raise ValueError, "form already has '%s' widget" % name
+        widget = widget_class(name, *args, **kwargs)
+        self._names[name] = widget
+        if isinstance(widget, SubmitWidget):
+            self.submit_widgets.append(widget) # will be rendered at end
+        elif isinstance(widget, HiddenWidget) or isinstance(widget, HiddenWidgetNoEscape):
+            self.hidden_widgets.append(widget) # will be render at beginning
+        else:
+            self.widgets.append(widget)
+
+    def add_hidden(self, name, value=None, escape=False, **kwargs):
+	if escape:
+            self.add(HiddenWidget, name, value, **kwargs)
+	else:
+            self.add(HiddenWidgetNoEscape, name, value, **kwargs)
+        
+def move_widget_to_front(form, name):
+    """Moves a widget to the first element in form's list.
+    
+    This function is required because the public api of
+    quixote.form2.Form doesn't provide this.
+    """
+    widget = None
+    for component in form.widgets:
+        if component.name == name:
+            widget = component
+            break
+    if widget:
+        form.widgets.remove(widget)
+        form.widgets.insert(0, widget)
+
+def make_widget_read_only(form, name):
+    widget = form.get_widget(name)
+    widget.attrs['readonly'] = 1
+    if widget.attrs.has_key('hint'):
+        del widget.attrs['hint']
+    
+
+def manage_form [html] (request, form_class,
+    menu_text='',
+    page_title='', suppress_top_heading=0,
+    heading_text='', preview_text='',
+    footer_text='',
+    commit_title='', commit_text='', commit_repl=None,
+    access_test=1, access_sorry='', result_store=[1],
+    rss_url='',
+    other_header='',
+    
+    **kwargs):
+    docstring="""Runs a form controller.
+    
+    form_class: Form subclass
+    menu_text: text to appear before page title, if any
+    page_title: title for render and preview pages and headings
+    suppress_top_heading: if set, will not display page_title heading at top of page
+    heading_text: text to appear before form
+    footer_text: text to appear after form
+    preview_text: if not empty, text to appear before preview;
+        form_class must have preview_button attribute if
+        preview_text is set
+    commit_title: title for commit page and heading
+    commit_text: text to appear when committed successfully
+    commit_repl: format data: commit_text % commit_repl
+        if commit_repl is 'RESULT', uses form.commit result instead
+    access_test: if false will return access_sorry message
+    **kwargs: keyword args passed to constructor of form_class
+    
+    Returns result of form.commit in result_store[0]
+    """
+    def sorry [html] ():
+        qon.ui.blocks.util.header(request, page_title, rss_url=rss_url, other_header=other_header)
+        menu_text
+        access_sorry
+        qon.ui.blocks.util.footer(page_title)
+
+    def render [html] ():
+        qon.ui.blocks.util.header(request, page_title, rss_url=rss_url, other_header=other_header)
+        menu_text
+        if not suppress_top_heading:
+            '<h1>%s</h1>' % page_title
+        heading_text
+        form.render()
+        footer_text
+        qon.ui.blocks.util.footer(page_title)
+        
+    def preview [html] ():
+        qon.ui.blocks.util.header(request, page_title, rss_url=rss_url, other_header=other_header)
+        menu_text
+        if not suppress_top_heading:
+            '<h1>%s</h1>' % page_title
+        preview_text
+        form.preview()
+        footer_text
+        qon.ui.blocks.util.footer(page_title)
+        
+    if not access_test:
+        return sorry()
+    
+    form = form_class(**kwargs)
+    
+    if not form.validate():
+        return render()
+        
+    if preview_text and form.get_submit() == form.preview_button:
+        return preview()
+            
+    result_store[0] = form.commit()
+    qon.ui.blocks.util.header(request, commit_title, rss_url=rss_url, other_header=other_header)
+    menu_text
+    '<h2>%s</h2>' % commit_title
+    if commit_repl:
+        if commit_repl == 'RESULT':
+            commit_text % result_store[0]
+        else:
+            commit_text % commit_repl
+    else:
+        commit_text
+    qon.ui.blocks.util.footer(commit_title)
+
+def manage_form_in_page [html] (form_class,
+    heading_text='', commit_text='', commit_repl='',
+    **kwargs):
+
+    form = form_class(**kwargs)
+    if not form.validate() or (form.get_submit() not in form.submit_buttons):
+        if form.get_submit() not in form.submit_buttons:
+            form.clear_errors()
+        heading_text
+        form.render()
+    else:
+        form.commit()
+        if commit_repl:
+            commit_text % commit_repl
+        else:
+            commit_text

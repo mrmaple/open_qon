@@ -1,0 +1,1372 @@
+"""
+$Id: admin.ptl,v 1.43 2006/01/16 05:23:31 alex Exp $
+"""
+from quixote import get_request
+from dulcinea.errors import NotLoggedInError
+from quixote.errors import TraversalError, AccessError
+from quixote.html import href
+from quixote.form2 import Form, TextWidget
+from qon import api
+from qon.base import get_user, get_database, get_user_database, \
+    get_usergroup_database, get_group_database, get_list_database, \
+    get_connection
+from qon.ui.form import QonForm, manage_form, manage_form_in_page
+from qon.ui import blocks
+from qon.ui.base import QonBaseUI
+import qon.log
+import qon.file
+import platform
+from qon.publisher import get_times
+from qon.util import tail_lines
+from qon.cache_logging import analyze_object_cache
+import os
+
+from qon.ui import messages
+_ = messages.t
+def _h(x): return htmltext(_(x))
+
+_q_exports = ['shame']
+
+_items_per_page = 50
+
+def _admin_home_tabs [html] (request):
+    tabs = (
+        {
+            'name': 'Home',
+            'path': '/admin/',
+            'accesskey': 'h',
+            'class': 'plain',
+        },
+        {
+            'name': 'Users',
+            'path': '/admin/user/',
+            'accesskey': 'u',
+            'class': 'plain',
+        },
+        {
+            'name': 'Usergroups',
+            'path': '/admin/ug/',
+            'accesskey': 'j',
+            'class': 'plain',
+        },
+        {
+            'name': 'Groups',
+            'path': '/admin/group/',
+            'accesskey': 'g',
+            'class': 'plain',
+        },
+        {
+            'name': 'DB',
+            'path': '/admin/db/',
+            'accesskey': 'd',
+            'class': 'plain',
+        },
+        {
+            'name': 'Files',
+            'path': '/admin/files/',
+            'accesskey': 'f',
+            'class': 'plain',
+        },
+        )
+        
+    '''
+    <h1>Admin</h1>
+    '''
+    blocks.util.section_tabs(request, tabs,
+        getattr(request, str('qon_section_mode'), ''))
+
+
+def _get_page_start(request):
+    page = request.get_form_var('page')
+    if not page or page < 1:
+        page = 1
+    else:
+        page = int(page)
+    start = (page-1) * _items_per_page
+    return page, start
+
+def _q_access(request):
+    if not get_user():
+        raise NotLoggedInError('You must be logged in to continue.')
+        
+    if not get_user().is_staff():
+        raise NotLoggedInError('You must be an administrative user to access this page.')
+
+    # hook in here to add global menu for /admin/
+    blocks.util.set_global_mode(request, 'Admin')
+    blocks.util.set_section_tabs(request, _admin_home_tabs)
+
+
+def _q_index [html] (request):
+    # /admin/
+    title = 'Administrative Access'
+    blocks.util.set_section_mode(request, 'Home')
+    blocks.util.header(request, title)
+    
+    '''
+    <h1>Unauthorized access prohibited</h1>
+    <p class="formHelp">
+    This means you.
+    </p>
+    '''
+
+    '''
+    <h1>Machine info</h1>
+    <p class="formHelp">
+    %s
+    </p>
+    ''' % str(platform.uname())
+
+    cache_hit_percentage = get_database().storage._cache.fc._n_accesses*100 / (get_database().storage._cache.fc._n_accesses + get_database().storage._cache.fc._n_adds)
+    '''
+    <h2>Stats for disk-based ClientCache of process %s</h2>
+    Cache hit percentage: <b>%s%%</b>
+    <table>
+    ''' % (os.getpid(), cache_hit_percentage)
+    for k, v in get_database().storage._cache.fc.__dict__.iteritems():
+        if k.startswith(str('_n_')) or k in [str('maxsize')]:
+            '''<tr><td>%s</td><td>%s</td></tr>''' % (k, v)
+    '''</table>'''
+    if 0:
+        '''
+        <tr><td>Number of accesses</td><td>%(_n_accesses)s</td></tr>
+        <tr><td>Number of adds</td><td>%(_n_adds)s</td></tr>
+        <tr><td>Number of added bytes</td><td>%(_n_added_bytes)s</td></tr>
+        <tr><td>Number of evicts</td><td>%(_n_evicts)s</td></tr>
+        <tr><td>Number of evicted bytes</td><td>%(_n_evicted_bytes)s</td></tr>
+        <tr><td>Number of removes</td><td>%(_n_removes)s</td></tr>
+        <tr><td>Number of removed bytes</td><td>%(_n_removed_bytes)s</td></tr>
+        ''' % get_database().storage._cache.fc.__dict__
+
+    '''    
+    <h2>Timing histograms for process %s</h2>
+    ''' % os.getpid()
+    histogram_names = ('Overall', 'Logged-In Users', 'Anonymous Users', 'XML Feeds')
+    x = 0
+    for rl in get_times():
+        '''
+        <b>%s</b><table>
+        ''' % histogram_names[x]
+        for c, n, p in rl:
+            '''<tr><td>< %s sec</td><td>%s</td><td>%s</td></tr>''' % (c, n, p)        
+        '''</table>'''
+        x += 1
+
+    '''    
+    <h2>Last 20 entries in timing.log of %s</h2>
+    <p><font size="1">
+    ''' % platform.node()
+    for line in tail_lines(filename=str('/www/log/qon/timing.log'), linesback=20, avgcharsperline=200):
+        '''<NOBR>%s</NOBR><br />''' % line
+    '''
+    </font></p>
+    '''
+
+    '''    
+    <h2>Stats of in-memory object cache for process %s</h2>
+    <p><font size="1">
+    ''' % os.getpid()
+    total_items = len(get_database().get_connection()._cache)
+    non_ghost_items = get_database().get_connection()._cache.ringlen()
+    ghost_items = total_items - non_ghost_items
+    '''
+    target size of cache (in objs): <b>%s</b><br />
+    # of objects currently in cache: <b>%s</b><br />
+    ''' % (get_database().get_connection()._cache.cache_size, total_items)
+
+    ghosts, non_ghosts = analyze_object_cache(get_database().get_connection())
+    '''
+    <b>Non-ghost Items (%d):</b><br />
+    ''' % non_ghost_items
+    for line in non_ghosts:
+        '''<NOBR>-- %s</NOBR><br />''' % line        
+    '''
+    <br />
+    <b>Ghost Items (%d)</b><br />
+    ''' % ghost_items
+    for line in ghosts:
+        '''<NOBR>-- %s</NOBR><br />''' % line    
+    '''
+    </font></p>
+    '''    
+    
+    blocks.util.footer(title)
+
+def shame [html] (request):
+    db = get_list_database()
+    
+    title = "Hall of Shame"
+    
+    blocks.util.set_section_mode(request, 'Home')
+    blocks.util.header(request, title)
+    '<h1>'
+    'Hall of Shame'
+    '</h1>'
+    '''<p class="formHelp">
+    Displays lowest ranked users, and all discussions and comments folded due to negative feedback.
+    Note that discussions and comments of low-ranked users are automatically folded if the author's
+    feedback score is -10 or less. Those items are not listed separately: click on a low-ranked user's
+    profile to see all of their contributions.
+    </p>
+    '''
+    
+    '''<h2>Lowest-ranked users</h2>'''
+    bottom_users = db.bottom_users()
+    rows = [(blocks.user.display_name(u),) for u in bottom_users]
+    blocks.util.format_table_rows(rows, headings=['Lowest-ranked users'], table_class='user-listing')   
+    
+    '''<h2>Folded discussions</h2>'''
+    items = []
+    comments = []
+    for group_id, group in get_group_database().root.iteritems():
+        for item in group.blog.get_items():
+            if item.get_karma_score() < qon.karma.min_karma_to_show:
+                items.append(item)
+            for comment in item.get_all_comments():
+                if comment.get_karma_score() < qon.karma.min_karma_to_show:
+                    comments.append((comment, item))
+        get_connection().cacheGC()
+    
+    if items:
+        blocks.util.format_table_rows(
+            [(blocks.blog.format_item_title(item),) for item in items],
+            headings=['Folded discussions'],
+            )
+    
+    '''<h2>Folded comments</h2>'''
+    if comments:
+        blocks.util.format_table_rows(
+            [(blocks.blog.format_comment_title(comment, item, standalone=1),) for comment, item in comments],
+            headings=['Folded comments'],
+            )
+    
+    blocks.util.footer()
+def get_crumb():
+    return 'Admin'
+    
+def _q_lookup(request, name):
+    if name == 'user':
+        return UserListUI(request)
+    elif name == 'ug':
+        return UserGroupListUI(request)
+    elif name == 'group':
+        return GroupListUI(request)
+    elif name == 'db':
+        return DBListUI(request)
+    elif name == 'files':
+        return FilesUI(request)
+    elif name == 'ip':
+        return IPUI(request)
+        
+class IPUI(QonBaseUI):
+
+    _q_exports = []
+        
+    def __init__(self, request):
+        blocks.util.set_section_mode(request, 'Users')        
+    
+    def _q_index [html] (self, request):
+        ''
+    
+    def _q_lookup(self, request, name):
+        return IPAddressUI(request, name)
+        
+class IPAddressUI(QonBaseUI):
+
+    _q_exports = []
+        
+    def __init__(self, request, name):
+        self.ip = name
+
+        blocks.util.set_section_mode(request, 'Users')
+        blocks.util.set_menus(request, [])
+    
+    def _q_index [html] (self, request):
+        title = "IP Address %s" % self.ip
+        
+        ips = get_list_database().get_reverse_ips()
+
+        blocks.util.header(request, title)
+        '''<h1>Users who have accessed the site from %s</h1>''' % self.ip
+        '''<p class="formHelp">May be as much as three hours out of date.</p>
+        '''
+        
+        users = ips.get(self.ip)
+        if users:
+            users.sort()
+            users.reverse()
+            rows = []
+            for dt, user in users:
+                rows.append((
+                    blocks.util.format_datetime(dt),
+                    blocks.user.display_name(user),
+                    _user_id_href(user),
+                    ))
+
+            blocks.util.format_table_rows(rows,
+                headings=['Last Hit', 'User', 'User ID'],
+                )
+        
+        blocks.util.footer()
+
+
+class UserListUI(QonBaseUI):
+
+    _q_exports = ['bydate', 'retired', 'redir_to_user']
+        
+    def __init__(self, request):
+        blocks.util.set_section_mode(request, 'Users')
+        
+        menus = [
+            {
+                'name': 'Retired',
+                'path': 'retired',
+                'title': 'See Retired/Deleted users.',
+            },
+            {
+                'name': 'Sort',
+                'items': [
+                {
+                    'name': 'By Name',
+                    'path': './',
+                    'title': 'Sort by Name'
+                },
+                {
+                    'name': 'By Date',
+                    'path': 'bydate',
+                    'title': 'Sort by Date'
+                },
+                ],
+            },
+            ]
+        
+        blocks.util.set_menus(request, menus)
+    
+    def get_crumb(self):
+        return 'Users'
+        
+    def _q_index [html] (self, request):
+        title = "Users by Name"
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+        
+        page, start = _get_page_start(request)
+        
+        db = get_user_database()
+        user_ids = db.root.keys()
+        num_users = len(user_ids)
+        cells, byname = _users_by_name(user_ids, start=start, count=_items_per_page)
+                
+        '''<h1>Users</h1>'''
+        
+        # helper form to find by e-mail
+        '''
+        <div>
+        <form action="redir_to_user">
+        Lookup by e-mail or user id:
+        <input type="text" name="u" size="32" />
+        <input type="submit" name="submit" value="Submit" />
+        </form>
+        </div>
+        '''
+        
+        while cells:
+            blocks.util.format_table_rows(cells[:_items_per_page], headings=['Name', 'E-mail', 'ID'],
+                table_class="recentchanges-listing")
+            '''<br />'''
+            cells = cells[_items_per_page:]
+            
+        '''<p>User count: %d</p>
+        ''' % num_users
+        
+        num_pages = (num_users - 1) / _items_per_page + 1
+        if num_pages > 1:
+            blocks.util.get_pagenav(page, num_pages, '''<a href="./?page=%s">''',
+                max_num_pages_to_show_on_one_page=20)
+            
+        blocks.util.footer()
+        
+    def _q_lookup(self, request, name):
+        return UserUI(request, name)
+        
+    def bydate [html] (self, request):
+        title = "Users by Date"
+        blocks.util.set_menu_mode(request, 'bydate')
+        blocks.util.header(request, title)
+        
+        page, start = _get_page_start(request)
+        
+        db = get_user_database()
+        user_ids = db.root.keys()
+        
+        bydate = [(db[id].get_user_data().member_since(), db[id]) for id in user_ids]
+        bydate.sort()
+        
+        num_users = len(bydate)
+        bydate = bydate[start:start+_items_per_page]
+        
+        cells = []
+        for member_since, user in bydate:
+            cells.extend((blocks.user.display_name(user),
+                blocks.util.format_datetime(member_since),
+                user.get_primary_email(),
+                _user_id_href(user),
+                ))
+                
+        '''<h1>Users</h1>'''
+        blocks.util.format_table(4, cells, headings=['Name', 'Member Since', 'E-mail', 'ID'],
+            table_class="recentchanges-listing")
+            
+        num_pages = (num_users - 1) / _items_per_page + 1
+        if num_pages > 1:
+            blocks.util.get_pagenav(page, num_pages, '''<a href="/admin/user/bydate?page=%s">''',
+                max_num_pages_to_show_on_one_page=20)
+
+        blocks.util.footer()
+
+    def retired [html] (self, request):
+        title = "Retired Users"
+        blocks.util.set_menu_mode(request, 'retired')
+        blocks.util.header(request, title)
+        
+        db = get_user_database()
+        retired_db = db.retired_users
+        user_ids = retired_db.keys()
+        
+        byname = [(blocks.user.display_name_plain(retired_db[id]), retired_db[id]) for id in user_ids]
+        byname.sort()
+        
+        cells = []
+        for display_name_plain, user in byname:
+            cells.extend((blocks.user.display_name(user),
+                user.get_primary_email(),
+                _user_id_href(user),
+                ))
+                
+        '''<h1>Retired Users</h1>'''
+        blocks.util.format_table(3, cells, headings=['Name', 'E-mail', 'ID'],
+            table_class="recentchanges-listing")
+            
+        '''<p>Count: %d</p>
+        ''' % len(user_ids)
+            
+        blocks.util.footer()
+
+    def redir_to_user(self, request):
+        return request.redirect('./%s/' % request.get_form_var('u'))
+        
+class UserUI(QonBaseUI):
+
+    _q_exports = ['delete', 'disable', 'enable', 'add_note', 'cancel_karma']
+
+    def __init__(self, request, name):
+        self.user = get_user_database().get_user(name)
+        if not self.user:
+            try:
+                self.user = get_user_database().retired_users[name]
+            except KeyError:
+                self.user = None
+
+        if not self.user:
+            try:
+                self.user = get_user_database().get_user_by_email(name)
+            except KeyError:
+                self.user = None
+
+        if not self.user:
+            raise TraversalError
+
+        menus = [
+            {
+                'name': 'Overview',
+                'path': './',
+                'title': 'User overview.',
+            },
+            {
+                'name': 'Staff Functions',
+                'title': 'Staff functions.',
+                'items':
+                [
+                {
+                    'name': 'Disable',
+                    'path': 'disable',
+                    'title': 'Disable this user. User will not be able to sign in.',
+                    'disabled': self.user.is_disabled(),
+                },
+                {
+                    'name': 'Cancel Karma',
+                    'path': 'cancel_karma',
+                    'title': "Cancel this user's karma to other users.",
+                },
+                ],
+            },
+            {
+                'name': 'Delete',
+                'path': 'delete',
+                'title': 'Delete this user. Remove completely from database.',
+                'disabled': not get_user().is_admin(),
+            },
+            ]
+        
+        blocks.util.set_menus(request, menus)
+        
+    def get_crumb(self):
+        return self.user.display_name()
+
+    def _q_index [html] (self, request):
+        title = "Admin: %s: %s" % (self.user.user_id, blocks.user.display_name_plain(self.user))
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+        
+        '''<h1>%s: %s</h1>''' % (self.user.user_id, blocks.user.display_name(self.user))
+        
+        if not get_user_database().get_user(self.user.get_user_id()):
+            '''<p class="alert">This user has been retired.</p>'''
+            
+        '''<p>Status: '''
+        if self.user.is_disabled():
+            '''<span class="alert">Disabled</span>
+            (Click here to immediately <a href="enable">enable user</a>.)
+            '''
+        else:
+            '''<span class="info">Active</span>'''
+        
+        blocks.user.display_email_list(self.user)
+        
+        '''<p>Group membership: 
+        '''
+        ', '.join([_user_group_display(g) for g in self.user.group_list()])
+        '''</p>'''
+        
+        if get_user().is_admin():
+            manage_form_in_page(AddToUserGroupForm,
+                heading_text='Add user to usergroup:',
+                commit_text='<p class="info">'+_('Your changes have been recorded.')+'</p>',
+                user=self.user,
+                )
+        
+        '''
+        <h2>IP addresses</h2>
+        <p class="formHelp">Click on an IP address to see all users who have
+        accessed the site from that IP address. May be slow the first time, please be patient.
+        </p>
+        '''
+        from socket import getfqdn
+        ips = self.user.get_ip_addresses()
+        ip_list = []
+        for k, v in ips.iteritems():
+            ip_list.append((v, k))
+        ip_list.sort()
+        ip_list.reverse()
+        
+        rows = []
+        for date, ip in ip_list:
+            rows.append((
+                blocks.util.format_datetime(date),
+                href(str('/admin/ip/%s/'%ip),ip),
+                getfqdn(ip),
+                ))
+        blocks.util.format_table_rows(rows, headings=['Last Hit', 'IP', 'Hostname'])
+        
+        '''
+        <h2>Old Display Names</h2>
+        '''
+        rows = []
+        rows.append(('Current', self.user.contact_name))
+
+        names = self.user.get_user_data().get_contact_names()
+        names.reverse()
+
+        for date, name in names:
+            rows.append((
+                blocks.util.format_datetime(date),
+                name,
+                ))
+        blocks.util.format_table_rows(rows, headings=['Date Abandoned', 'Name'])
+
+        '''
+        <h2>Notes</h2>
+        <p class="formHelp">Visible only on this page to staff/admin users.</p>
+        '''
+        rows = []
+        notes = self.user.get_user_data().get_notes()
+        notes.reverse()
+
+        for date, user, msg in notes:
+            rows.append((
+                blocks.util.format_datetime(date),
+                blocks.user.display_name(user),
+                msg,
+                ))
+        blocks.util.format_table_rows(rows, headings=['Date', 'Author', 'Note'])
+
+        '''
+        <h3>Add note</h3>
+        <form action="add_note" method="post">
+        <textarea name="msg" rows="5" cols="60"></textarea><br />
+        <input type="submit" value="Submit" />
+        </form>
+        '''
+        
+        blocks.util.footer()
+
+    def add_note(self, request):
+        msg = request.get_form_var('msg')
+        if msg:
+            self.user.get_user_data().add_note(get_user(), msg.strip())
+        return request.redirect('./')
+        
+    def enable(self, request):
+        if self.user.is_disabled():
+            api.user_set_disabled(self.user, False)
+            _add_admin_note(self.user, get_user(), "Enabled User")
+            qon.log.admin_info('EnableUser\t%s' % (self.user.get_user_id()))
+        return request.redirect('./')
+
+    def disable [html] (self, request):
+        blocks.util.set_menu_mode(request, 'disable')
+
+        manage_form(request, DisableUserForm,
+            page_title='Disable user: %s' % blocks.user.display_name_plain(self.user),
+            heading_text='<p class="alert">'+_('Are you sure you want to disable this user?')+'</p>',
+            commit_text='<p class="info">'+_('Your user has been disabled.')+'</p>',
+            user=self.user,
+            )
+
+    def delete [html] (self, request):
+        if not get_user().is_admin():
+            raise AccessError
+            
+        blocks.util.set_menu_mode(request, 'delete')
+
+        manage_form(request, DeleteUserForm,
+            page_title='Delete user: %s' % blocks.user.display_name_plain(self.user),
+            heading_text='<p class="alert">'+_('Once you delete this user, it cannot be recovered.')+'</p>',
+            commit_text='<p class="info">'+_('Your user has been deleted.')+'</p>',
+            user=self.user,
+            )
+
+    def cancel_karma [html] (self, request):
+        blocks.util.set_menu_mode(request, 'cancel_karma')
+
+        h = '''
+        <p class="alert">
+        Are you sure you want to cancel all the feedback given by this user to other users?
+        </p>
+        <p class="alert">
+        NOTE: This action is NOT reversible.
+        </p>
+        '''
+
+        manage_form(request, CancelKarmaForm,
+            page_title='Cancel feedback by user: %s' % blocks.user.display_name_plain(self.user),
+            heading_text=h,
+            commit_text='<p class="info">'+_("User's feedback has been canceled.")+'</p>',
+            user=self.user,
+            )
+
+
+class UserGroupListUI(QonBaseUI):
+    """Handles /admin/ug/"""
+    
+    _q_exports = []
+    
+    def __init__(self, request):
+        blocks.util.set_section_mode(request, 'Usergroups')
+        blocks.util.set_menus(request, [])
+        
+    def get_crumb(self):
+        return 'Usergroups'
+
+    def _q_index [html] (self, request):
+        title = "Usergroups"
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+        
+        cells = [_user_group_display(ug) for ug in get_usergroup_database().root.values()]
+        blocks.util.format_table(1, cells, headings=['Usergroup'],
+            table_class="recentchanges-listing")
+            
+        blocks.util.footer()
+        
+    def _q_lookup(self, request, name):
+        return UserGroupUI(request, name)
+
+class UserGroupUI(QonBaseUI):
+    """Handles /admin/ug/user-group/"""
+    
+    _q_exports = ['remove']
+    
+    def __init__(self, request, name):
+        blocks.util.set_section_mode(request, "Usergroups")
+        
+        menus = [
+            {
+                'name': 'Overview',
+                'path': './',
+                'title': 'Usergroup overview.',
+            },
+            ]
+        
+        blocks.util.set_menus(request, menus)
+
+        self.usergroup = get_usergroup_database().get_usergroup(name)
+        if not self.usergroup:
+            raise TraversalError
+            
+    def get_crumb(self):
+        return self.usergroup.display_name()
+
+    def _q_index [html] (self, request):
+        title = "Usergroup %s" % self.usergroup.display_name()
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+        '''<h1>%s members</h1>''' % self.usergroup.display_name()
+        
+        db = get_user_database()
+        members = [u.get_user_id() for u in db.root.values() if u.is_member_of_group(self.usergroup)]
+        rows, byname = _users_by_name(members)
+
+        # add action (unjoin) links
+        row_index = 0
+        for row in rows:
+            row.append(href('remove?q=%s' % byname[row_index][2], 'remove'))
+            row_index += 1
+
+        blocks.util.format_table_rows(rows, headings=['Name', 'E-mail', 'ID', 'Action'],
+            table_class="recentchanges-listing")
+        
+        blocks.util.footer()
+
+    def remove [html] (self, request):
+        if not get_user().is_admin():
+            raise AccessError
+            
+        title = "Remove"
+        blocks.util.set_menu_mode(request, 'remove')
+        q = request.form.get('q')
+        user = get_user_database().get_user(q) or get_user_database().retired_users[q]
+        manage_form(request, RemoveUserFromUsergroupForm,
+            page_title='Remove user %s from usergroup %s' % (blocks.user.display_name_plain(user),
+                self.usergroup.get_user_id()),
+            heading_text='<p class="alert">'+_('Once you remove this user, the action cannot be undone.')+'</p>',
+            commit_text='<p class="info">'+_('This user has been removed from the usergroup %s.' % self.usergroup.get_user_id())+'</p>',
+            user=user,
+            usergroup=self.usergroup,
+            q=q,
+            )
+
+        
+class GroupListUI(QonBaseUI):
+    """Handles /admin/group/"""
+    
+    _q_exports = ['bydate', 'orphans']
+    
+    def __init__(self, request):
+        blocks.util.set_section_mode(request, 'Groups')
+        menus = [
+            {
+                'name': 'Orphans',
+                'path': 'orphans',
+                'title': 'Display groups that are not associated with any other group.',
+            },
+            {
+                'name': 'Sort',
+                'items': [
+                {
+                    'name': 'By Name',
+                    'path': './',
+                    'title': 'Sort by Name'
+                },
+                {
+                    'name': 'By Date',
+                    'path': 'bydate',
+                    'title': 'Sort by Date'
+                },
+                ],
+            },
+            ]
+        
+        blocks.util.set_menus(request, menus)
+        
+    def get_crumb(self):
+        return 'Groups'
+        
+    def _q_index [html] (self, request):
+        title = "Groups"
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+
+        db = get_group_database()
+        user_ids = db.root.keys()
+        cells = _groups_by_name(user_ids)        
+                
+        '''<h1>Groups</h1>'''
+        blocks.util.format_table(4, cells, headings=['Name', 'State', 'Members', 'ID'],
+            table_class="recentchanges-listing")
+            
+        '''<p>Group count: %d</p>
+        ''' % len(user_ids)
+            
+        blocks.util.footer()
+        
+    def orphans [html] (self, request):
+        title = "Orphaned Groups"
+        blocks.util.set_menu_mode(request, 'orphans')
+        blocks.util.header(request, title)
+        
+        db = get_group_database()
+        groups = []
+        for user_id, group in db.root.iteritems():
+            if not db.member_groups(group):
+                groups.append(group)
+        
+        '''<h1>%s</h1>''' % title
+        blocks.group.list_table(groups, title="Orphaned Groups")
+        blocks.util.footer()
+        
+        
+    def bydate [html] (self, request):
+        title = "Groups by Date"
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+
+        db = get_group_database()
+        user_ids = db.root.keys()
+        cells = _groups_by_date(user_ids)        
+                
+        '''<h1>Groups</h1>'''
+        blocks.util.format_table(5, cells, headings=['Name', 'State', 'Members', 'Date', 'ID'],
+            table_class="recentchanges-listing")
+            
+        '''<p>Group count: %d</p>
+        ''' % len(user_ids)
+            
+        blocks.util.footer()
+
+    def _q_lookup(self, request, name):
+        return GroupUI(request, name)
+        
+        
+class GroupUI(QonBaseUI):
+    """Handles /admin/group/group_id/"""
+    
+    _q_exports = ['unjoin']
+    
+    def __init__(self, request, name):
+        blocks.util.set_section_mode(request, "Groups")
+        
+        menus = [
+            {
+                'name': 'Overview',
+                'path': './',
+                'title': 'Usergroup overview.',
+            },
+            ]
+        
+        blocks.util.set_menus(request, menus)
+
+        self.group = get_group_database().get_group(name)
+        if not self.group:
+            raise TraversalError
+            
+    def get_crumb(self):
+        return self.group.display_name()
+
+    def _q_index [html] (self, request):
+        title = "Group %s" % self.group.display_name()
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+        '''<h1>%s members</h1>''' % self.group.display_name()
+        
+        page, start = _get_page_start(request)
+
+        db = get_user_database()
+        from qon.user import User
+        members = [u.get_user_id() for u in self.group.get_member_list() if isinstance(u, User)]
+        rows, byname = _users_by_name(members, start=start, count=_items_per_page)
+        num_users = len(members)
+        
+        # add action (unjoin) links
+        row_index = 0
+        for row in rows:
+            row.append(href('unjoin?q=%s' % byname[row_index][2], 'unjoin'))
+            row_index += 1
+            
+        blocks.util.format_table_rows(rows, headings=['Name', 'E-mail', 'ID', 'Action'],
+            table_class="recentchanges-listing")
+        
+        num_pages = (num_users - 1) / _items_per_page + 1
+        if num_pages > 1:
+            blocks.util.get_pagenav(page, num_pages, '''<a href="./?page=%s">''')
+
+        blocks.util.footer()
+        
+    def unjoin [html] (self, request):
+        if not get_user().is_admin():
+            raise AccessError
+            
+        title = "Unjoin"
+        blocks.util.set_menu_mode(request, 'unjoin')
+        q = request.form.get('q')
+        user = get_user_database().get_user(q) or get_user_database().retired_users[q]
+        manage_form(request, UnjoinUserForm,
+            page_title='Unjoin user %s from group %s' % (blocks.user.display_name_plain(user),
+                blocks.group.display_name_plain(self.group)),
+            heading_text='<p class="alert">'+_('Once you unjoin this user, the action cannot be undone.')+'</p>',
+            commit_text='<p class="info">'+_('This user has been unjoined from the group %s.' % blocks.group.display_name_plain(self.group))+'</p>',
+            user=user,
+            group=self.group,
+            q=q,
+            )
+
+class DBListUI(QonBaseUI):
+    """Handles /admin/db/"""
+    
+    _q_exports = []
+    
+    def __init__(self, request):
+        blocks.util.set_section_mode(request, 'DB')
+        blocks.util.set_menus(request, [])
+        
+    def get_crumb(self):
+        return 'Databases'
+        
+    def _q_index [html] (self, request):
+        title = "Databases"
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+        
+        cells = []
+        for db in ['user', 'group', 'usergroup']:
+            cells.append([href('%s/' % db, db)])
+            
+        '''<h1>Databases</h1>'''
+        blocks.util.format_table_rows(cells, headings=['database'],
+            table_class="recentchanges-listing")
+                
+        blocks.util.footer()
+        
+    def _q_lookup(self, request, name):
+        return DBUI(request, name)
+        
+        
+class DBUI(QonBaseUI):
+    """Handles /admin/db/db_id/"""
+    
+    _q_exports = ['root']
+    
+    def __init__(self, request, name):
+        blocks.util.set_section_mode(request, "DB")
+        
+        self.name = name
+        
+        if name == 'user':
+            self.db = get_user_database()
+        elif name == 'group':
+            self.db = get_group_database()
+        elif name == 'usergroup':
+            self.db = get_usergroup_database()
+        else:
+            raise TraversalError
+        
+        menus = [
+            {
+                'name': 'Overview',
+                'path': './',
+                'title': 'Usergroup overview.',
+            },
+            ]
+        
+        blocks.util.set_menus(request, menus)
+            
+    def get_crumb(self):
+        return self.name
+
+    def _q_index [html] (self, request):
+        title = "%s Database" % self.name
+        blocks.util.set_menu_mode(request, './')
+        blocks.util.header(request, title)
+        
+        perms = self.db.get_perms()
+        
+        '''<h1>%s</h1>''' % title
+        
+        '''<p>Root: %s keys.</p>''' % href('root', len(self.db.root.keys()))
+        
+        
+        '''<p>Owners: '''
+        ', '.join([href('/admin/user/%s/' % u.get_user_id(), u.display_name()) for u in self.db.owners])
+        '''</p>'''
+        
+        '''<p>Usergroups: '''
+        ', '.join([href('/admin/ug/%s/' % u.get_user_id(), u.display_name()) for u in self.db.groups])
+        '''</p>'''
+        
+        '''<ul>
+        <li>Owner permissions: %s</li>
+        <li>Group permissions: %s</li>
+        <li>Other permissions: %s</li>
+        </ul>
+        ''' % (
+            perms[0], perms[1], perms[2],
+            )
+            
+        blocks.util.footer()
+        
+    def root [html] (self, request):
+        title = "%s Database Root" % self.name
+        blocks.util.set_menu_mode(request, 'root')
+        blocks.util.header(request, title)
+        
+        path_seg = self._path_segment()
+        
+        keys = [href('/admin/%s/%s/' % (path_seg, k), k) for k in self.db.root.keys()]
+        
+        '''<h1>%s</h1>''' % title
+        '''<p>%d keys:</p>''' % len(keys)
+        
+        blocks.util.format_table(1, keys, headings=['keys'],
+            table_class="recentchanges-listing")
+        
+        
+        blocks.util.footer()
+        
+    def _path_segment(self):
+        if self.name == 'usergroup':
+            return 'ug'
+        else:
+            return self.name
+
+
+class FilesUI(QonBaseUI):
+    """Handles /admin/files/"""
+    
+    _q_exports = ['find']
+    
+    def __init__(self, request):
+        blocks.util.set_section_mode(request, 'Files')
+        blocks.util.set_menus(request, [])
+        
+        self.files = []
+    
+    def get_crumb(self):
+        return 'Files'
+        
+    def _add_files(self, group, dir):
+        for entry in dir.root:
+            if isinstance(entry, qon.file.QonDir):
+                self._add_files(group, entry)
+            else:
+                self.files.append((entry.get_size(), entry, group))
+        
+    def _build_file_list(self):
+        for g in get_group_database().root.values():
+            file_db = g.file_db
+            for entry in file_db.list_contents():
+                if isinstance(entry, qon.file.QonDir):
+                    self._add_files(g, entry)
+                elif isinstance(entry, qon.file.QonFile):
+                    self.files.append((entry.get_size(), entry, g))
+                    
+        self.files.sort()
+        self.files.reverse()
+        
+    def _q_index [html] (self, request):
+        from qon.ui.file import format_file_size
+        
+        title = 'Files'
+        blocks.util.set_menu_mode(request, './')
+        page, start = _get_page_start(request)
+        
+        # gather file information
+        self._build_file_list()
+        num_files = len(self.files)
+        
+        rows = []
+        for size, file, group in self.files[start:start+_items_per_page]:
+            rows.append((format_file_size(size),
+                href('./find?g=%s&f=%s' % (group.get_user_id(),
+                    file.get_path().replace(str('/'), str('.'))),
+                    file.filename),
+                blocks.util.display_name(group)))
+        
+        blocks.util.header(request, title)
+        '''<h1>%s</h1>''' % title
+        blocks.util.format_table_rows(rows, headings=['Size', 'Name', 'Group'])
+
+        num_pages = (num_files - 1) / _items_per_page + 1
+        if num_pages > 1:
+            blocks.util.get_pagenav(page, num_pages, '''<a href="./?page=%s">''',
+                max_num_pages_to_show_on_one_page=20)
+
+        blocks.util.footer()
+        
+    def find(self, request):
+    
+        def traverse_dir(start_path, dir, search_path):
+            """Look in dir for search_path, keeping track of traversal beginning at start_path."""
+            from dulcinea.database import unpack_oid
+            
+            for entry in dir.root:
+                if isinstance(entry, qon.file.QonDir):
+                    (r1, r2) = traverse_dir(start_path + '%d/' % unpack_oid(dir._p_oid),
+                        entry,
+                        search_path)
+                    if r1 or r2:
+                        return (r1, r2)
+                else:
+                    if entry.get_path() == search_path:
+                        return (start_path + '%d/' % unpack_oid(dir._p_oid), search_path)
+
+            return (None, None)
+    
+        group_id = request.get_form_var('g')
+        path = request.get_form_var('f')
+        path = path.replace('.', '/')
+        
+        search_path = ''
+        
+        group = get_group_database().get_group(group_id)
+        if group:
+            file_db = group.file_db
+            dir_path = ''
+            for entry in file_db.list_contents():
+                if isinstance(entry, qon.file.QonDir):
+                    (start_path, search_path) = traverse_dir('', entry, path)
+                    if search_path == path:
+                        break
+                else:
+                    if entry.get_path() == path:
+                        start_path = ''
+                        search_path = path
+                        break
+            
+        if search_path == path:
+            search_path = search_path.replace('/', '.') + '/'
+            return request.redirect(blocks.group.path_to_files(group) + start_path + search_path)
+        else:
+            raise TraversalError
+        
+class DeleteUserForm(QonForm):
+
+    submit_button = 'submit-delete'
+    submit_buttons = [submit_button]
+
+    def __init__(self, user):
+        QonForm.__init__(self)
+        self.user = user
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_submit(self.submit_button, 'Delete this user')
+        
+    def commit(self):
+        """Delete user. 
+        
+        """
+        if self.get_submit() == self.submit_button:
+            api.user_delete(self.user)
+            qon.log.admin_info('DeleteUser\t%s' % self.user.get_user_id())
+        
+class DisableUserForm(QonForm):
+
+    submit_button = 'submit-disable'
+    submit_buttons = [submit_button]
+
+    def __init__(self, user):
+        QonForm.__init__(self)
+        self.user = user
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_submit(self.submit_button, 'Disable this user')
+        
+    def commit(self):
+        """Disable user. 
+        
+        """
+        if self.get_submit() == self.submit_button:
+            api.user_set_disabled(self.user, True)
+            _add_admin_note(self.user, get_user(), "Disabled User")
+            qon.log.admin_info('DisableUser\t%s' % self.user.get_user_id())
+            return get_request().redirect('./')
+        
+class CancelKarmaForm(QonForm):
+
+    submit_button = 'submit-disable'
+    submit_buttons = [submit_button]
+
+    def __init__(self, user):
+        QonForm.__init__(self)
+        self.user = user
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_submit(self.submit_button, "Cancel this user's feedback")
+        
+    def commit(self):
+        """Cancel this user's feedback. 
+        
+        """
+        if self.get_submit() == self.submit_button:
+            # log karma that will be canceled
+            karma_given_data = self.user.karma_given_report()
+            karma_given = ['%s:%d' % (u.get_user_id(), karma) for u, karma in karma_given_data]
+
+            _add_admin_note(self.user, get_user(), "Karma reversed:\n\n%s" % "\n".join(karma_given))
+            qon.log.admin_info('CancelUserKarma\t%s' % self.user.get_user_id())
+            qon.api.user_cancel_karma_given(self.user, get_user())
+            return get_request().redirect('./')
+        
+class AddToUserGroupForm(QonForm):
+
+    submit_button = 'submit-add'
+    submit_buttons = [submit_button]
+
+    def __init__(self, user):
+        QonForm.__init__(self)
+        self.user = user
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_string('ug', title="Usergroup")
+        self.add_submit(self.submit_button, 'Add to Usergroup')
+        
+    def validate(self):
+        if not QonForm.validate(self):
+            return False
+            
+        if not get_usergroup_database().get_usergroup(self['ug']):
+            self.set_error('ug', "Can't find usergroup '%s'" % self['ug'])
+            return False
+        
+        return True
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.user_add_to_usergroup(self.user, get_usergroup_database().get_usergroup(self['ug']))
+            qon.log.admin_info('AddToGroup\t%s\t%s' % (self.user.get_user_id(), self['ug']))
+            get_request().redirect('./')
+
+class UnjoinUserForm(QonForm):
+
+    submit_button = 'submit-delete'
+    submit_buttons = [submit_button]
+
+    def __init__(self, user, group, q):
+        QonForm.__init__(self)
+        self.user = user
+        self.group = group
+        self.q = q
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_hidden('q', value=self.q)
+        self.add_submit(self.submit_button, 'Unjoin this user')
+        
+    def commit(self):
+        """Unjoin user. 
+        
+        """
+        if self.get_submit() == self.submit_button:
+            api.group_leave(self.group, self.user)
+            qon.log.admin_info('UnjoinUser\t%s\t%s' % (self.group.get_user_id(), self.user.get_user_id()))
+
+class RemoveUserFromUsergroupForm(QonForm):
+
+    submit_button = 'submit-delete'
+    submit_buttons = [submit_button]
+
+    def __init__(self, user, usergroup, q):
+        QonForm.__init__(self)
+        self.user = user
+        self.usergroup = usergroup
+        self.q = q
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_hidden('q', value=self.q)
+        self.add_submit(self.submit_button, 'Remove this user')
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            #api.group_leave(self.group, self.user)
+            api.user_remove_from_usergroup(self.user, self.usergroup)
+            qon.log.admin_info('RemoveUserFromUsergroup\t%s\t%s' % (self.user.get_user_id(), self.usergroup.get_user_id()))
+
+def _user_group_display [html] (ug):
+    if get_usergroup_database().get_usergroup(ug.get_user_id()):
+        href('/admin/ug/%s/' % ug.get_user_id(), ug.display_name())
+    else:
+        # shouldn't happen, but some users still have refs to groups which have been deleted
+        href('/admin/ug/%s/' % ug.get_user_id(), '''<span class="alert">%s</span>''' % ug.display_name())
+    
+def _users_by_name(user_ids, start=0, count=0):
+    db = get_user_database()
+    
+    # keep an eye out for retired users
+    byname = [(blocks.user.display_name_plain(db.get_user(id) or db.retired_users[id]),
+        db.get_user(id), id) for id in user_ids]
+    byname.sort()
+
+    if count:
+        byname = byname[start:start+count]
+    
+    rows = []
+    for display_name_plain, user, user_id in byname:
+        if user:
+            rows.append([blocks.user.display_name(user),
+                user.get_primary_email(),
+                _user_id_href(user),
+                ])
+        else:
+            user = db.retired_users[user_id]
+            rows.append([htmltext('%s <span class="alert">(retired)</span>' % blocks.user.display_name(user)),
+                user.get_primary_email(),
+                _user_id_href(user),
+                ])
+    return rows, byname
+
+def _user_id_href(user):
+    return href('/admin/user/%s/' % user.get_user_id(), user.get_user_id())
+
+def _groups_by_name(group_ids):
+    db = get_group_database()
+    byname = [(blocks.group.display_name_plain(db[id]), db[id]) for id in group_ids]
+    byname.sort()
+    
+    cells = []
+    for display_name_plain, group in byname:
+        cells.extend((blocks.group.display_name(group),
+            group.get_state(),
+            len(group.get_member_list()),
+            _group_id_href(group),
+            ))
+    return cells
+
+def _groups_by_date(group_ids):
+    db = get_group_database()
+    bydate = [(db[id].date, db[id]) for id in group_ids]
+    bydate.sort()
+    
+    cells = []
+    for date, group in bydate:
+        cells.extend((blocks.group.display_name(group),
+            group.get_state(),
+            len(group.get_member_list()),
+            blocks.util.format_datetime(group.date),
+            _group_id_href(group),
+            ))
+    return cells
+
+def _group_id_href(group):
+    return href('/admin/group/%s/' % group.get_user_id(), group.get_user_id())
+
+def _add_admin_note(user, author, note):
+    """Add a user note from author user, but tagged by admin user."""
+    admin_user = get_user_database()['admin']
+    qon.api.user_add_staff_note(user, admin_user,
+        "%s (%s): %s" % (blocks.user.display_name_plain(author), author.get_user_id(), note))
+
+

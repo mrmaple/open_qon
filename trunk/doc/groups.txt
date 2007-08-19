@@ -1,0 +1,6 @@
+Groups in Qon
+-------------
+
+admin       Qon administrators
+staff       Qon staff
+

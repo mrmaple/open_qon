@@ -1,0 +1,478 @@
+"""
+$Id: whatshot.ptl,v 1.8 2007/04/02 12:09:17 jimc Exp $
+"""
+__pychecker__ = "no-noeffect unusednames=request"
+
+from quixote import get_user
+from quixote.errors import AccessError
+import blocks
+from qon.search import searchengine, get_unix_timestamp
+import qon.ui.blocks.search
+import qon.ui.blocks.util
+from quixote.html import href
+from datetime import datetime, timedelta
+from qon.base import get_list_database
+from qon.ui.base import QonBaseUI
+from qon.ui import messages
+_ = messages.t
+
+_q_exports = []
+
+_min_breadth = 5
+
+def _whatshot_home_tabs [html] (request):
+
+    tabs = (
+        {
+            'name': "Highest Rated",
+            'path': '/whatshot/',
+            'accesskey': 't',
+            'class': 'plain',
+        },
+##        {
+##            'name': "Recent",
+##            'path': '/whatshot/recent/',
+##            'accesskey': 'r',
+##            'class': 'plain',
+##        },        
+##        {
+##            'name': "Discussions",
+##            'path': '/whatshot/news/',
+##            'accesskey': 'd',
+##            'class': 'plain',
+##        },
+##        {
+##            'name': "Workspace Pages",
+##            'path': '/whatshot/ws/',
+##            'accesskey': 'w',
+##            'class': 'plain',
+##        },
+##        {
+##            'name': "Personal News",
+##            'path': '/whatshot/usernews/',
+##            'accesskey': 'p',
+##            'class': 'plain',
+##        },
+##        {
+##            'name': "Comments",
+##            'path': '/whatshot/comments/',
+##            'accesskey': 'c',
+##            'class': 'plain',
+##        },        
+        {
+            'name': 'Most Watched',
+            'path': '/whatshot/watched/',
+            'accesskey': 'w',
+            'class': 'plain',
+        },        
+        {
+            'name': 'Most Widely Read',
+            'path': '/whatshot/widelyread/',
+            'accesskey': 'r',
+            'class': 'plain',
+        },    
+        )
+    
+    blocks.util.section_tabs(request, tabs,
+        getattr(request, str('qon_section_mode'), ''))
+
+def _q_access(request):
+    # hook in here to set tabs
+    #blocks.util.set_global_mode(request, "What's Hot")
+    blocks.util.set_global_mode(request, "Popular")
+    blocks.util.set_section_tabs(request, _whatshot_home_tabs)
+    #blocks.util.set_help_block(request, _("What's hot"))
+    blocks.util.set_help_block(request, _("Popular"))
+
+    # clear out sub-menus   
+    blocks.util.set_menus(request, [])
+
+def get_crumb():
+    return "Popular" 
+
+def _q_index [html] (request):
+    # set sub-tab
+    blocks.util.set_section_mode(request, 'Highest Rated')
+
+    # set sub-menus   
+    blocks.util.set_menus(request, _highest_rated_menus)
+
+    # bold face the right sub-menu
+    blocks.util.set_menu_mode(request, '/whatshot/')    
+    
+    # title
+    title = 'ned.com: Highest Rated'
+    blocks.util.header(request, title)
+
+    '<h1>'
+    'Highest Rated Items'
+    '</h1>'
+
+    '''
+    <p class="formHelp">
+    Ranked by overall feedback score (with a minimum %i separate feedback givers.)
+    </p>
+    ''' % _min_breadth
+
+    # list of top 50   
+    qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Discussion'), str('DiscussionComment'), 
+        str('Usernews'), str('UsernewsComment'), str('Wikipage'), str('Poll')), 
+        minKarma = 1, min_breadth=_min_breadth)    
+      
+    blocks.util.footer()
+
+def _q_lookup(request, name):
+    if name == 'watched':
+        return WatchedUI(request, name)
+    elif name == 'widelyread':
+        return WidelyReadUI(request, name)
+    elif name == 'news':
+        return TopDiscussionsUI(request, name)
+    elif name == 'ws':
+        return TopWorkspacePagesUI(request, name)
+    elif name == 'usernews':
+        return TopPersonalNewsUI(request, name)
+    elif name == 'comments':
+        return TopCommentsUI(request, name)
+    elif name == 'recent':
+        return RecentUI(request, name)          
+    return None
+
+_highest_rated_menus = [
+    {
+        'name': 'All',
+        'path': '/whatshot/',
+        'title': 'View all highest-rated items.',
+    },
+    {
+        'name': 'Discussions',
+        'path': '/whatshot/news/',
+        'title': 'View highest-rated discussions.',
+    },
+    {
+        'name': 'Personal News',
+        'path': '/whatshot/usernews/',
+        'title': 'View highest-rated personal news.',
+    },
+    {
+        'name': 'Comments',
+        'path': '/whatshot/comments/',
+        'title': 'View highest-rated comments.',
+    },        
+    {
+        'name': 'Workspace Pages',
+        'path': '/whatshot/ws/',
+        'title': 'View highest-rated workspace pages.',
+    },              
+    ]
+
+# ------------------------------------------------------------------------------------------
+
+class WatchedUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Most Watched')
+        
+    def _q_index [html] (self, request):        
+    
+        # title
+        title = 'ned.com: Most Watched'
+        blocks.util.header(request, title)
+
+        # do it   
+        db = get_list_database()
+        
+        '<h1>'
+        'Most Watched Items'
+        '</h1>'
+
+        most_watched = get_list_database().most_watched()
+        cells = []
+        for item in most_watched:
+            # is try/except block so that we only show objects that have the can_read() routine defined
+            try:
+                if item[1].can_read(get_user()):
+                    cells.extend([qon.ui.blocks.util.fancy_one_line_display(item[1], dont_bold=True), item[0]])
+            except:
+                pass
+            
+        '''
+        <p class="formHelp">
+        Ranked by number of users who are watching an item.
+        </p>
+        '''
+
+        blocks.util.format_table(2, cells, headings=['Most Watched', 'Users'],
+                table_class="forum-listing-tight",
+                centered_columns=[1])
+        
+        '''
+        <p class="formHelp">
+        Rankings are updated hourly, even though the ratings on individual items are up to date.
+        </p>
+        '''
+        
+        blocks.util.footer()  
+        
+    def get_crumb(self):
+        return "Most Watched"
+
+# ------------------------------------------------------------------------------------------
+
+class WidelyReadUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Most Widely Read')  
+        
+    def _q_index [html] (self, request):        
+      
+        # title
+        title = 'ned.com: Most Widely Read'
+        blocks.util.header(request, title)
+
+        # do it   
+        db = get_list_database()
+        
+        '<h1>'
+        'Most Widely-Read Items'
+        '</h1>'
+
+        most_read = get_list_database().most_read_items()
+        cells = []
+        for item in most_read:
+            if item[1].can_read(get_user()):        
+                cells.extend([qon.ui.blocks.util.fancy_one_line_display(item[1], dont_bold=True), item[0]])
+        '''
+        <p class="formHelp">
+        Ranked by number of users who have read an item. Includes only discussion items and personal news items active in the last 3 days.
+        </p>
+        '''
+
+        blocks.util.format_table(2, cells, headings=['Most Read', 'Users'],
+                table_class="forum-listing-tight",
+                centered_columns=[1])
+
+        '''
+        <p class="formHelp">
+        Rankings are updated hourly, even though the ratings on individual items are up to date.
+        </p>
+        ''' 
+          
+        blocks.util.footer() 
+        
+    def get_crumb(self):
+        return "Most Widely Read"
+
+# ------------------------------------------------------------------------------------------
+
+class TopDiscussionsUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Highest Rated')
+
+        # set sub-menus   
+        blocks.util.set_menus(request, _highest_rated_menus)        
+
+        # bold face the right sub-menu
+        blocks.util.set_menu_mode(request, '/whatshot/news/')       
+        
+    def _q_index [html] (self, request):        
+      
+        # title
+        title = 'ned.com: Top Discussions'
+        blocks.util.header(request, title)
+
+        # do it   
+        db = get_list_database()
+        
+        '<h1>'
+        'Top Discussions'
+        '</h1>'
+
+        '''
+        <p class="formHelp">
+        Ranked by overall feedback score (with a minimum %i separate feedback givers.)
+        </p>
+        ''' % _min_breadth
+
+        # list of top 50  
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Discussion'),), min_breadth=_min_breadth)
+          
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "Top Discussions"
+
+# ------------------------------------------------------------------------------------------
+
+class TopWorkspacePagesUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Highest Rated')
+
+        # set sub-menus   
+        blocks.util.set_menus(request, _highest_rated_menus)
+
+        # bold face the right sub-menu
+        blocks.util.set_menu_mode(request, '/whatshot/ws/')           
+        
+    def _q_index [html] (self, request):        
+      
+        # title
+        title = 'ned.com: Top Workspace Pages'
+        blocks.util.header(request, title)
+
+        # do it   
+        db = get_list_database()
+        
+        '<h1>'
+        'Top Workspace Pages'
+        '</h1>'
+
+        '''
+        <p class="formHelp">
+        Ranked by overall feedback score (with a minimum %i separate feedback givers.)
+        </p>
+        ''' % _min_breadth
+
+        # list of top 50  
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Wikipage'),), minKarma = 1, min_breadth=_min_breadth)
+          
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "Top Workspace Pages"
+
+# ------------------------------------------------------------------------------------------
+
+class TopPersonalNewsUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Highest Rated')
+
+        # set sub-menus   
+        blocks.util.set_menus(request, _highest_rated_menus)
+
+        # bold face the right sub-menu
+        blocks.util.set_menu_mode(request, '/whatshot/usernews/')             
+        
+        
+    def _q_index [html] (self, request):        
+      
+        # title
+        title = 'ned.com: Top Personal News'
+        blocks.util.header(request, title)
+
+        # do it   
+        db = get_list_database()
+        
+        '<h1>'
+        'Top Personal News'
+        '</h1>'
+
+        '''
+        <p class="formHelp">
+        Ranked by overall feedback score (with a minimum %i separate feedback givers.)
+        </p>
+        ''' % _min_breadth
+
+        # list of top 50  
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Usernews'),), minKarma = 1, min_breadth=_min_breadth)
+          
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "Top Personal News"
+
+# ------------------------------------------------------------------------------------------
+
+class TopCommentsUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Highest Rated')
+
+        # set sub-menus   
+        blocks.util.set_menus(request, _highest_rated_menus)
+
+        # bold face the right sub-menu
+        blocks.util.set_menu_mode(request, '/whatshot/comments/')          
+        
+        
+    def _q_index [html] (self, request):        
+      
+        # title
+        title = 'ned.com: Top Comments'
+        blocks.util.header(request, title)
+
+        # do it   
+        db = get_list_database()
+        
+        '<h1>'
+        'Top Comments'
+        '</h1>'
+
+        '''
+        <p class="formHelp">
+        Ranked by overall feedback score (with a minimum %i separate feedback givers.)
+        </p>
+        ''' % _min_breadth
+
+        # list of top 50  
+        qon.ui.blocks.search.highest_rated(get_user(), 50, 
+            (str('DiscussionComment'), str('UsernewsComment')), minKarma = 1, min_breadth=_min_breadth)
+          
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "Top Comments"
+
+# ------------------------------------------------------------------------------------------
+
+class RecentUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, name):      
+        # set sub-tab
+        blocks.util.set_section_mode(request, 'Recent')  
+        
+    def _q_index [html] (self, request):        
+      
+        # title
+        title = 'ned.com: Recently Hot'
+        blocks.util.header(request, title)
+
+        # do it   
+        db = get_list_database()
+        
+        '<h1>'
+        'Recently'
+        '</h1>'
+
+        '''
+        <p class="formHelp">
+        Ranked by overall feedback score.
+        </p>
+        '''
+
+        # list of top 50 that have been updated in last X days
+        _days_cutoff = 3
+        cutoff_date = datetime.utcnow() - timedelta(days=_days_cutoff)
+        cutoff_unix_time = get_unix_timestamp(cutoff_date)        
+        qon.ui.blocks.search.highest_rated(get_user(), 50, (str('Discussion'), str('DiscussionComment'), str('Usernews'), str('UsernewsComment'), str('Wikipage'), str('Poll')), minDate=str(cutoff_unix_time), minKarma = 1)    
+          
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "Recent"        

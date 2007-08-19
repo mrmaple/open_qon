@@ -1,0 +1,1177 @@
+"""
+$Id: my.ptl,v 1.40 2007/06/08 17:52:43 jimc Exp $
+"""
+from urllib import unquote, quote
+from quixote import get_request
+from quixote.errors import TraversalError, AccessError
+from quixote.html import href, url_quote
+from qon.base import get_user, get_group_database, get_user_database
+from dulcinea.database import pack_oid, unpack_oid
+from qon.ui import blocks
+from qon.ui.base import QonBaseUI
+from qon.ui.user import user_contributions
+from qon.ui.blocks.util import path_to_obj
+from datetime import datetime
+from qon.util import sort_list, format_ago, iso_to_dt, dt_to_iso, un_camel_case, xml_escape, get_oid
+from qon.ui.message import MessageUI
+from qon.ui.util import unwatch
+
+#from qon.util import url_quote_no_slashes, format_age, format_ago, sort_list, \
+#        format_time_remaining, get_page_template, un_camel_case, xml_escape
+
+
+import qon.blog
+import qon.wiki
+import qon.group
+
+from qon.ui import messages
+_ = messages.t
+
+def _h(x): return htmltext(_(x))
+
+_q_exports = []
+
+
+# feeds header
+_other_header_template = '''
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/news.xml" title="Recent Discussions" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/unread_news.xml" title="Unread Recent Discussions" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/workspace.xml" title="Recent Workspace Pages" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/workspace_summary.xml" title="Recent Workspace Page Summary" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/comments.xml" title="Recent Comments" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/unread_comments.xml" title="Unread Recent Comments" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/watchlist.xml" title="My Watch List" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/threads.xml" title="My Threads" />
+<link rel="service.feed" type="application/atom+xml" href="/my/feed/%(user_id)s/thread_comments.xml" title="My Thread Comments" />
+'''
+
+def get_crumb():
+    return "My ned.com"
+
+def _my_tabs [html] (request):
+    tabs = (
+        {
+            'name': 'My groups',
+            'path': '/my/',
+            'accesskey': 'g',
+            'class': 'plain',
+        },
+        {
+            'name': "My discussions",
+            'path': '/my/threads/',
+            'accesskey': 'd',
+            'class': 'plain',
+        },
+        {
+            'name': "My watch list",
+            'path': '/my/watch_list/',
+            'accesskey': 'w',
+            'class': 'plain',
+        },
+        {
+            'name': "My tags",
+            'path': '/my/tags/',
+            'accesskey': 't',
+            'class': 'plain',
+        },
+        {
+            'name': "Top activity",
+            'path': '/my/top_activity/',
+            'accesskey': 'a',
+            'class': 'plain',
+        },
+        {
+            'name': "My feedback",
+            'path': '/my/feedback/',
+            'accesskey': 'f',
+            'class': 'plain',
+        },      
+        )
+    '''
+    <h1>%s</h1>
+    ''' % blocks.user.display_name(get_user())
+    
+    blocks.util.section_tabs(request, tabs,
+        getattr(request, str('qon_section_mode'), ''))
+    
+    
+def _q_access(request):
+
+    # all sub-tabs will share these    
+    blocks.util.set_global_mode(request, 'My ned.com')
+    blocks.util.set_section_tabs(request, _my_tabs)
+    blocks.util.set_help_block(request, _('My ned.com'))
+    
+    menus = []
+    blocks.util.set_menus(request, menus) 
+
+def _q_lookup(request, name):
+
+    if name == 'threads':
+        return ThreadsUI(request, name)
+    elif name == 'watch_list':
+        return WatchListUI(request, name)
+    elif name == 'tags':
+        blocks.util.set_section_mode(request, 'my tags')
+        return qon.ui.user.UserTagsUI(request, get_user())
+        #return MyTagsUI(request, name)
+    elif name == 'top_activity':
+        return TopActivity(request, name)
+    elif name == 'feedback':
+        return Feedback(request, name) 
+    elif name == 'feed':
+        return FeedsUI(request, name) 
+    return None
+
+    
+def _q_index [html] (request):
+    user = get_user()
+    if not user:
+        raise AccessError
+
+    blocks.util.set_section_mode(request, 'My groups')
+    
+    _user_heading(request, user)
+    
+    '''
+    <div>
+    <h2>My groups</h2>
+    <p class="formHelp">
+    Groups you are a member of, with the seven most recently updated groups on top.
+    </p>
+    </div>
+    '''
+
+    if 0:
+        '''
+        <p>
+        <span style="background-color: yellow;">New!</span> Use <a href="./feed/">Personalized RSS Feeds</a>
+        with your RSS news reader to more easily track changes in your groups.
+        </p>
+        '''
+        
+    _user_group_list(request, user)
+
+    blocks.util.footer()
+
+class FeedsUI(QonBaseUI):
+    """Handles /my/feed/"""
+
+    _q_exports = []
+
+    def __init__(self, request, name):
+        if 0:
+            blocks.util.set_help_block(request, _('Personalized RSS Feeds'))
+
+    def _q_access(self, request):
+        user = get_user()
+
+        # provide HTTP BASIC authentication for not signed in users
+        # for access to feeds
+        if not user:
+
+            user = qon.ui.util.http_basic_auth(request)
+        
+        if not user:
+            raise AccessError
+
+    def _q_lookup(self, request, name):
+        return UserFeedUI(request, name)
+
+    def _q_index [html] (self, request):
+        blocks.util.set_section_mode(request, 'My groups')
+
+        title = "%s: Personalized RSS Feeds" % messages.site_title
+        user_id = get_user().get_user_id()
+        other_header = _other_header_template % dict(user_id=user_id)
+
+        blocks.util.header(request, title, other_header=other_header)
+        '''
+        <h1>%(title)s</h1>
+
+        <p>The following personalized RSS feeds are available for you to track
+        items from your My Groups tab and your Watch List.
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/news.xml">Recent Discussions</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of the 50 most recently-updated discussions found
+        in any of the groups in which you are a member.
+        </span>
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/unread_news.xml">Unread Recent Discussions</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of the 50 most recently-updated, <em>but unread by
+        you,</em> discussions found in any of the groups in which you are
+        a member. A discussion is considered <em>unread</em> if you
+        haven't read the topic yet, or if a comment
+        has been added since the last time you read it (anywhere you'd see
+        a 'new to me' link).
+        </span>
+        </p>
+        
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/workspace.xml">Recent Workspace Pages</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of the 50 most recently-updated workspace
+        pages found in any of the groups in which you are a member.
+        Includes full text of each page.
+        </span>
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/workspace_summary.xml">Recent Workspace Page Summary</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of the 200 most recently-updated workspace
+        pages found in any of the groups in which you are a member.
+        Does not include text of page.
+        </span>
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/comments.xml">Recent Comments</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of the 50 most recent comments on
+        discussions from all of your groups, whether or not they are unread.
+        </span>
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/unread_comments.xml">Unread Recent Comments</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of the 50 most recent unread comments on
+        discussions found in any of the groups in which you are a member.
+        This feed also provides links to easily
+        mark as 'read' the comments, discussions, or groups contaied in the feed.
+        </span>
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/watchlist.xml">My Watch List</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of every discussion and workspace page in
+        your watch list.
+        </span>
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/threads.xml">My Threads</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of 50 most recent discussions you have participated
+        in.
+        </span>
+        </p>
+
+        <p>
+        <span class="title">
+        <a href="/my/feed/%(user_id)s/thread_comments.xml">My Thread Comments</a>
+        </span><br />
+        <span class="subtitle">
+        Provides a feed of 50 most recent comments on discussions you have participated
+        in.
+        </span>
+        </p>
+
+        ''' % dict(title=title,
+            user_id=user_id
+            )
+        
+        blocks.util.footer()
+
+class UserFeedUI(QonBaseUI):
+    """Handles /my/feed/user_id/"""
+
+    _q_exports = ['mark_all_read', 'mark_read', 'news_xml', 'comments_xml',
+    'workspace_xml', 'workspace_summary_xml', 'unread_news_xml', 'unread_comments_xml',
+    'watchlist_xml', 'threads_xml', 'thread_comments_xml',
+    ]
+
+    def __init__(self, request, name):
+        self.request = request
+        self.user = get_user_database().get_user(name)
+        if not self.user:
+            raise TraversalError
+
+    def _q_access(self, request):
+        user = get_user()
+
+        # note that by this point, http basic auth should
+        # have been handled by an earlier _q_access
+
+        if not user:
+            raise AccessError
+
+        # access error if we're signed in as a different error
+        if self.user is not user:
+            raise AccessError
+
+    def _q_lookup(self, request, name):
+
+        name = name.lower()
+        if name.endswith('.xml'):
+            dispatch = name.replace('.', '_')
+            if dispatch in self._q_exports:
+                return getattr(self, dispatch)()
+
+        return None
+
+
+    def mark_all_read [html] (self, request):
+
+        d = request.get_form_var('d', None)
+        dt = iso_to_dt(unquote(d))
+
+        if dt:
+            # get groups
+            groups = get_group_database().users_groups(self.user)
+
+            # mark group blogs as read as of dt
+            for g in groups:
+                g.get_blog().mark_items_as_read(self.user, dt)
+            
+            # output info page
+            title = "Mark all groups as read"
+            '''
+            <html>
+            <head><title>%(title)s</title></head>
+            <body>
+            <p>All of your groups' discussions have been marked as read as of
+            %(date)s.</p>
+            <p><a href="javascript:window.close();">Close window</a></p>
+            </body>
+            </html>
+            ''' % dict(
+                title=title,
+                date=blocks.util.format_datetime(dt),
+                )
+        else:
+            raise AccessError, \
+                '''
+                <p class="alert">Invalid date, or date not provided.</p>
+                '''
+
+    def mark_read [html] (self, request):
+
+        tag = unquote(request.get_form_var('t', str('')))
+
+        item = blocks.util.lookup_atom_id(tag)
+
+        if not item:
+            raise AccessError, \
+                '''
+                <p class="alert">Invalid tag, or none provided.</p>
+                '''
+
+        # was an "as of" date submitted as well?
+        dt = iso_to_dt(request.get_form_var('d', str('')))
+
+        if isinstance(item, qon.group.Group):
+            item.get_blog().mark_items_as_read(self.user, dt)
+        else:
+            item.read_item(self.user, dt)
+
+        # output info page
+        title = "Mark as read"
+        dt = dt or item.date
+        '''
+        <html>
+        <head><title>%(title)s</title></head>
+        <body>
+        <p>This item has been marked as read as of
+        %(date)s.</p>
+        <p><a href="javascript:window.close();">Close window</a></p>
+        </body>
+        </html>
+        ''' % dict(
+            title=title,
+            date=blocks.util.format_datetime(dt),
+            )
+
+
+    def workspace_xml(self):
+        """Produce Atom feed of recent workspace pages from my groups.
+        
+        Limited to most recent 50 items.
+        """
+        _num_items = 50
+
+        user = get_user()
+        feed_title = "%s: My Workspace Pages for %s" % (messages.site_title,
+            xml_escape(blocks.user.display_name_plain(user)))
+        url = blocks.util.full_url('/my/')
+
+        # get user's groups list
+        groups = get_group_database().users_groups(user)
+
+        # collect pages
+        items = qon.wiki.recent_items([g.get_wiki() for g in groups], count=_num_items)
+
+        return self._return_workspace_feed(feed_title, url, items)
+
+    def workspace_summary_xml(self):
+        """Produce Atom feed of summary of all workspace pages from my groups.
+        """
+        _num_items = 200
+
+        user = get_user()
+        feed_title = "%s: My Workspace Page Summary for %s" % (messages.site_title,
+            xml_escape(blocks.user.display_name_plain(user)))
+        url = blocks.util.full_url('/my/')
+
+        # get user's groups list
+        groups = get_group_database().users_groups(user)
+
+        # collect pages
+        items = qon.wiki.recent_items([g.get_wiki() for g in groups], count=_num_items)
+
+        return self._return_workspace_feed(feed_title, url, items, summary=True)
+
+    def unread_news_xml(self):
+        """Produce Atom feed of unread discussions from my groups.
+        
+        Limited to 50 most recent unread discussions.
+        """
+        _num_items = 50
+
+        user = get_user()
+        feed_title = "%s: My Unread Discussions for %s" % (messages.site_title,
+            xml_escape(blocks.user.display_name_plain(user)))
+        url = blocks.util.full_url('/my/')
+
+        # get user's groups list
+        groups = get_group_database().users_groups(user)
+
+        # collect discussions
+        items_bydate = []
+        for g in groups:
+            unread_bydate = g.get_blog().unread_items(user)
+            unread_bydate.sort()
+            items_bydate.extend(unread_bydate[-_num_items:])
+
+        # sort by date descending
+        items_bydate.sort()
+
+        # limit to 50 most recent items
+        items_bydate = items_bydate[-_num_items:]
+        items_bydate.reverse()
+
+        return self._return_item_feed(feed_title, url, items_bydate, link_unread=user)
+
+    def news_xml(self):
+        """Produce Atom feed of recent discussions from my groups.
+        
+        Limited to most recent 50 items.
+        """
+        _num_items = 50
+
+        user = get_user()
+        feed_title = "%s: My Discussions for %s" % (messages.site_title,
+            xml_escape(blocks.user.display_name_plain(user)))
+        url = blocks.util.full_url('/my/')
+
+        # get user's groups list
+        groups = get_group_database().users_groups(user)
+
+        # collect discussions
+        items_bydate = []
+        for g in groups:
+            items_bydate.extend(g.get_blog().recent_items_with_date(count=_num_items, consider_comments=True))
+
+        # sort by date descending
+        items_bydate.sort()
+        items_bydate = items_bydate[-_num_items:]
+        items_bydate.reverse()
+
+        return self._return_item_feed(feed_title, url, items_bydate, link_unread=user)
+
+    def threads_xml(self):
+        """Produce Atom feed of My Threads (/my/threads/).
+        
+        """
+        items_bydate = [(i.last_modified(consider_comments=True), i) for i in _get_threads(self.user)]
+
+        feed_title = "%s: My Threads for %s" % (messages.site_title,
+            xml_escape(blocks.user.display_name_plain(self.user)))
+        url = blocks.util.full_url('/my/threads/')
+
+        # sort by date descending
+        items_bydate.sort()
+        items_bydate.reverse()
+
+        return self._return_item_feed(feed_title, url, items_bydate, link_unread=self.user)
+
+    def thread_comments_xml(self):
+        """Produce Atom feed of comments on My Threads (/my/threads/).
+        
+        """
+        _num_items = 50
+
+        feed_title = "%s: My Thread Comments for %s" % (messages.site_title,
+            xml_escape(blocks.user.display_name_plain(self.user)))
+        url = blocks.util.full_url('/my/threads/')
+
+        items = _get_threads(self.user)
+        comments_bydate = []
+        for i in items:
+            for c in i.get_all_comments()[-_num_items:]:
+                comments_bydate.append((c.last_modified(), c))
+
+
+        # sort by date descending
+        comments_bydate.sort()
+        comments_bydate = comments_bydate[-_num_items:]
+        comments_bydate.reverse()
+
+        return self._return_comment_feed(feed_title, url, comments_bydate)
+
+    def _return_workspace_feed(self, feed_title, url, items, summary=False):
+        # create feed
+        if items:
+            mod = items[0].watchable_last_change()
+        else:
+            mod = datetime.utcnow()
+
+        feed = blocks.blog.format_atom_custom_feed(feed_title, url, mod)
+
+        # populate feed
+        for i in items:
+            if summary:
+                entry = blocks.wiki.format_atom_page_summary(i, add_group_title=True)
+            else:
+                entry = blocks.wiki.format_atom_page(i, add_group_title=True)
+            feed.entries.append(entry)
+
+        return self._feed_output(feed)
+
+    def _return_item_feed(self, feed_title, url, items_bydate, link_unread=None):
+        # create feed
+        if items_bydate:
+            submitted = items_bydate[0][0]
+        else:
+            submitted = datetime.utcnow()
+
+        feed = blocks.blog.format_atom_custom_feed(feed_title, url, submitted)
+
+        # populate feed
+        for date, i in items_bydate:
+            # add item, considering comments, so item appears modified when
+            # a new comment is added
+            entry = blocks.blog.format_atom_item(i, consider_comments=True, add_group_title=True,
+                link_unread=link_unread)
+            feed.entries.append(entry)
+
+        return self._feed_output(feed)
+
+    def comments_xml(self):
+        """Produce Atom feed of recent discussion comments.
+
+        Provides 50 most recent comments.
+        """
+        _num_items = 50
+
+        user = get_user()
+        feed_title = "%s: Recent Comments in My Groups for %s" % (
+            messages.site_title,
+            xml_escape(blocks.user.display_name_plain(user)),
+            )
+            
+        url = blocks.util.full_url('/my/')
+
+        # get user's groups list
+        groups = get_group_database().users_groups(user)
+
+        # collect no more than 50 most recent discussions
+        recent_bydate = []
+        for g in groups:
+            recent_bydate.extend(g.get_blog().recent_items_with_date(count=_num_items, consider_comments=True))
+
+        recent_bydate.sort()
+        recent_bydate = recent_bydate[-_num_items:]
+
+        # collect comments
+        items_bydate = []
+        for date, i in recent_bydate:
+            for c in i.get_all_comments()[-_num_items:]:
+                items_bydate.append((c.last_modified(), c))
+
+
+        items_bydate.sort()
+        items_bydate = items_bydate[-_num_items:]
+        items_bydate.reverse()
+
+        return self._return_comment_feed(feed_title, url, items_bydate)
+
+    def unread_comments_xml(self):
+        """Produce Atom feed of unread discussion comments.
+
+        Provides most recent 50 unread comments from all discussions in
+        user's groups.
+
+        """
+        _num_items = 50
+
+        user = get_user()
+        feed_title = "%s: Recent Unread Comments in My Groups for %s" % (
+            messages.site_title,
+            xml_escape(blocks.user.display_name_plain(user)),
+            )
+            
+        url = blocks.util.full_url('/my/')
+
+        # get user's groups list
+        groups = get_group_database().users_groups(user)
+
+        # collect no more than 50 most recent unread discussions
+        unread_bydate = []
+        for g in groups:
+            unread_bydate.extend(g.get_blog().unread_items(user))
+
+        unread_bydate.sort()
+        unread_bydate = unread_bydate[-_num_items:]
+
+        # collect comments
+        items_bydate = []
+        for date, i in unread_bydate:
+            last_read = i.last_read(user)
+            for c in i.get_all_comments()[-_num_items:]:
+                # if comment was created or modified after the date I
+                # last read the item, it is considered new
+                if c.date > last_read:
+                    items_bydate.append((c.last_modified(), c))
+
+        items_bydate.sort()
+        items_bydate = items_bydate[-_num_items:]
+        items_bydate.reverse()
+
+        return self._return_comment_feed(feed_title, url, items_bydate)
+    
+    def watchlist_xml(self):
+        """Produce Atom feed of my watch list.
+        """
+
+        feed_title = "%s: My Watch List for %s" % (
+            messages.site_title,
+            xml_escape(blocks.user.display_name_plain(self.user)),
+            )
+        url = blocks.util.full_url('/my/')
+
+        items = self.user.get_watch_list().watched_items()
+        items = sort_list(items, lambda x: x.watchable_modified_date())
+
+        return self._return_item_or_page_feed(feed_title, url, items)
+
+    def _return_item_or_page_feed(self, feed_title, url, items):
+        # create feed
+        submitted = datetime.utcnow()
+
+        feed = blocks.blog.format_atom_custom_feed(feed_title, url, submitted)
+
+        # populate feed
+        for i in items:
+            # only add blog items and workspace pages
+            if isinstance(i, qon.blog.BlogItem):
+                entry = blocks.blog.format_atom_item(i, consider_comments=True, add_group_title=True)
+            elif isinstance(i, qon.wiki.WikiPage):
+                entry = blocks.wiki.format_atom_page(i, add_group_title=True)
+            else:
+                entry = None
+
+            if entry:
+                feed.entries.append(entry)
+
+        return self._feed_output(feed)
+
+    def _return_comment_feed(self, feed_title, url, items_bydate):
+        # create feed
+        user_id = self.user.get_user_id()
+
+        if items_bydate:
+            submitted = items_bydate[0][0]
+        else:
+            submitted = datetime.utcnow()
+
+        qsubmitted = quote(dt_to_iso(submitted))
+
+        feed = blocks.blog.format_atom_custom_feed(feed_title, url, submitted)
+
+        # template for footer text in comment feeds
+        extra_content = qon.util.xml_escape('''<p>
+        <b>Mark as read on ned.com: </b>
+        <a href="%s">(this comment)</a>,
+        <a href="%s">(this discussion)</a>,
+        <a href="%s">(this group)</a> or
+        <a href="%s">(this entire feed)</a>
+        </p>
+        ''')
+
+        # populate feed
+        for date, c in items_bydate:
+            links = (
+                # link to this comment
+                blocks.util.full_url('/my/feed/%s/mark_read' % user_id) + \
+                    '?t=%s' % (
+                    quote(blocks.util.atom_id(c)),
+                    ),
+                # link to this comment's parent, with feed's timestamp
+                blocks.util.full_url('/my/feed/%s/mark_read' % user_id) + \
+                    '?t=%s&amp;d=%s' % (
+                    quote(blocks.util.atom_id(c.parent_blogitem)),
+                    qsubmitted,
+                    ),
+                # link to group
+                blocks.util.full_url('/my/feed/%s/mark_read' % user_id) + \
+                    '?t=%s&amp;d=%s' % (
+                    quote(blocks.util.atom_id(c.parent_blogitem.blog.ihb)),
+                    qsubmitted,
+                    ),
+                # use mark_all_read for all groups
+                blocks.util.full_url('/my/feed/%s/mark_all_read' % user_id) + \
+                    '?d=%s' % (
+                    qsubmitted,
+                    ),
+                )
+                
+            entry = blocks.blog.format_atom_comment(c, c.parent_blogitem,
+                None, add_group_title=True,
+                extra_content = extra_content % links,
+                )
+            feed.entries.append(entry)
+
+        return self._feed_output(feed)
+
+    def _feed_output(self, feed):
+        self.request.response.set_header('content-type', 'text/xml; charset=utf-8')
+        return feed.output()
+
+
+def _user_heading [html] (request, user):
+    title = "ned.com: %s's home" % blocks.user.display_name_plain(user)
+    
+    user_id = user.get_user_id()
+    other_header = _other_header_template % dict(user_id=user_id)
+    
+    blocks.util.header(request, title, other_header=other_header)
+    
+            
+def _user_group_list [html] (request, user):
+    db = get_group_database()
+    if user is not None:
+
+        invitations = db.users_invitations(user)
+        if invitations:
+            blocks.group.list_table(invitations, title='The following groups have invited me to join')
+            
+        groups = db.users_groups(user)
+        blocks.group.list_summaries(groups, show_highest_rated=False)
+        
+# ------------------------------------------------------------------------------------------
+
+def _get_threads(user):
+    # gather recent user contributions from user profile
+    threads = user.get_activity().recent_participation()
+    items = [item for date, item in threads if item.can_read(user) and not item.is_deleted()]
+    return items
+
+class ThreadsUI(QonBaseUI):
+
+    _q_exports = []
+    
+    def __init__(self, request, name):
+        self.user = get_user()
+        if not self.user:
+            raise AccessError
+        
+        blocks.util.set_section_mode(request, 'My discussions')
+
+    def _q_index [html] (self, request):
+        title = "ned.com: My Recent Discussions"
+        blocks.util.header(request, title)
+        
+        '''
+        <h1>My Recent Discussions</h1>
+        <p class="formHelp">
+        Displays the fifty (50) most recent discussions I've participated in across all groups and personal news.
+        </p>
+        '''
+        items = _get_threads(self.user)
+        blocks.blog.display_items_table(items,
+            count=50,
+            title="Discussion",
+            )
+        blocks.util.footer()
+
+    def get_crumb(self):
+        return "My discussions"        
+
+# ------------------------------------------------------------------------------------------
+class MyTagsUI(QonBaseUI):
+
+    _q_exports = []
+    
+    def __init__(self, request, name):
+        self.user = get_user()
+        if not self.user:
+            raise AccessError
+        
+        blocks.util.set_section_mode(request, 'My tags')
+
+    def get_crumb(self):
+        return "My tags"        
+
+    def _q_index [html] (self, request):
+        title = "ned.com: My Tags"
+        blocks.util.header(request, title)
+        user = get_user()
+        
+        '''
+        <h1>My Tags</h1>
+        <p class="formHelp">
+        Displays the tags that I've applied to items site-wide.
+        </p>
+        '''
+        tags_n_counts = user.get_tags_n_counts()
+        "You have %i tags<br />" % len(tags_n_counts)
+
+        if tags_n_counts:
+            blocks.tags.cloud(tags_n_counts, user, './')
+        else:
+            "You haven't applied any tags yet."
+
+        blocks.util.footer()
+
+    def _q_lookup(self, request, component):
+        return self.tag_results(request, component)
+
+    def tag_results [html](self, request, component):
+        title = "ned.com: Tag Results"
+        blocks.util.header(request, title)
+
+        '<H1>'
+        'Items tagged with %s by %s' % (component, self.user.display_name())
+        '</H1>'
+
+	if component in self.user.tags:
+            item_oids = self.user.tags[component]
+            qon.ui.blocks.tags.tagged_items_table(item_oids, [component])
+        else:
+            "Nothing has been tagged with %s yet" % component
+
+        blocks.util.footer()
+
+# ------------------------------------------------------------------------------------------
+
+class WatchListUI(QonBaseUI):
+    """Display a page with a full watchlist.
+
+    This is an expanded version of the WatchList that usually appears on the left of any page.
+    It adds longer descriptions, and the ability to remove multiple items at a time.
+    """
+    _q_exports = []
+    
+    def __init__(self, request, name):
+        self.user = get_user()
+        if not self.user:
+            raise AccessError
+        
+        blocks.util.set_section_mode(request, 'My watch list')
+
+    def _q_index [html] (self, request):
+        title = "ned.com: My Watch List"
+
+        processing_message = None
+        # remove any items if they just clicked on "remove selected"
+        if request.get_form_var('submit-remove_selected'):
+            targets = request.get_form_var('watch_item')
+            if not targets:
+                targets = []
+            if type(targets) is not list:
+                targets = [targets]
+
+            for target in targets:
+                item = get_oid(pack_oid(long(target)))
+
+                user = get_user()
+                if user is not None:
+                    user.get_watch_list().stop_watching_item(item)
+                #we could use unwatch, but it always re-directs
+                #qon.ui.util.unwatch(request, item)
+            #
+            processing_message = "Removed %i item%s <br />" % (len(targets), ["s",""][len(targets)==1])
+        #
+        # we process the form before the header... so that the 'my watch list' is updated
+
+        blocks.util.header(request, title)
+        
+        '''
+        <h1>My Watch List</h1>
+        <p class="formHelp"> Displays all of the items in my watch list.</p>
+        '''
+
+        # show the results of the form handling
+        if processing_message:
+            processing_message
+
+        user = self.user
+        watch_list = user.get_watch_list()
+        watched_items = watch_list.watched_items()
+        changed_items = watch_list.changed_unseen_items()
+
+        # sort watch list by date
+        watched_items = sort_list(watched_items, lambda x: x.watchable_modified_date())
+
+        action_url = get_request().get_url()
+        """
+        <form action="%s" method="post">
+        """ % (action_url)
+
+        cells = []
+        for item in watched_items:
+            is_changed = item in changed_items
+            href_to_item = path_to_obj(item)
+            if is_changed and isinstance(item, qon.blog.BlogItem):
+                href_to_item = qon.ui.blocks.blog.full_path_to_unread(item, user)
+                item_text = qon.ui.blocks.util.fancy_one_line_display(item, alt_href=href_to_item)
+            else:
+                item_text = qon.ui.blocks.util.fancy_one_line_display(item)
+
+            #item_text = href(href_to_item, un_camel_case(format_string(item.watchable_name())),
+            #    title=item.watchable_info())
+
+            if is_changed:
+                item_text = "<strong>%s</strong>" % item_text
+            item_modified =  format_ago(item.watchable_modified_date())
+
+            checkbox = '<input type="checkbox" name="watch_item" value="%s" />' % str(unpack_oid(item._p_oid))
+            #cell = '&nbsp;&nbsp;'.join([checkbox, item_modified, item_text])
+            cell = '&nbsp;&nbsp;'.join([checkbox, item_text])
+
+            cells.extend([cell, item_modified])
+
+        if not cells:
+            """There are no watched items.  Use the 
+            Add link on the left to add whatever 
+            discussions, or groups that you would like to add.<br /><br />
+
+            When the discussion is updated, the name will be show 
+            appear bold until you read it again.""" 
+        else:
+
+            column_headings = ['watch list item', 'updated']
+            qon.ui.blocks.util.format_table(len(column_headings), cells, column_headings, table_class='forum-listing-tight')
+        #
+        
+        """
+        <div class="submit"><div class="SubmitWidget widget">
+        <input type="submit" name="submit-remove_selected" value="Remove Selected Items" />
+        </div></div>                
+        </form>
+        """
+
+        blocks.util.footer()
+    #
+
+    def get_crumb(self):
+        return "My discussions"        
+
+# ------------------------------------------------------------------------------------------
+
+class TopActivity(QonBaseUI):
+
+    _q_exports = []
+    _top_activity_items_per_page = 25
+    _cap_num_friends = 50
+
+    def __init__(self, request, name):
+        self.user = get_user()
+        if not self.user:
+            raise AccessError
+        
+        blocks.util.set_section_mode(request, 'Top Activity')
+
+    def _get_top_activity_page_start(self, request):
+        page = request.get_form_var('page')
+        if not page or page < 1:
+            page = 1
+        else:
+            page = int(page)
+        start = (page-1) * self._top_activity_items_per_page
+        return page, start
+
+    def _get_top_activity(self, thresh):
+        # get users I've given positive feedback to
+        kf = [(i.karma_points_from(self.user), i) for i in self.user.karma_plus_given_to()]
+        
+        # filter out anyone less than threshold
+        kf = [(karma, i) for karma, i in kf if karma > (thresh-1)]
+        
+        # sort the list
+        kf.sort()
+        
+        # truncate to max
+        kf = kf[-self._cap_num_friends:]
+        kf.reverse()
+        
+        # gather all friends' contributions
+        items = []
+        for karma, user in kf:
+            bi, pn = user_contributions(user)
+            items.extend(bi)
+            items.extend(pn)
+        
+        # sort by date
+        items.sort()
+        
+        # cap number of items
+        # items = items[-100:]
+        items.reverse()
+        return items
+        
+    def _q_index [html] (self, request):
+        # recent postings by people on friends list
+            
+        thresh = request.get_form_var('thresh')
+        user_thresh = self.user.get_user_data().top_activity_thresh()
+        if thresh:
+            try:
+                thresh = max(1, int(thresh))
+            except ValueError:
+                thresh = user_thresh
+        else:
+            thresh = user_thresh
+            
+        # if thresh was changed, make it sticky
+        if thresh != user_thresh:
+            self.user.get_user_data().set_top_activity_thresh(thresh)
+            
+        title = "ned.com: My top users' activity"
+        blocks.util.header(request, title)
+
+        '''<h1>My top users' activity</h1>
+        <p class="formHelp">
+        Recent activity by the top %d people to whom I've given at least %d points of positive feedback.
+        Includes discussion items, comments, and personal news items.
+        </p>
+        ''' % (self._cap_num_friends, thresh)
+        
+        '''
+        <div style="text-align: right;"><form>Feedback threshold: <input type="text" name="thresh" size="2" value="%d" />
+        <input type="submit" value="Set" /></form></div>
+        ''' % thresh
+        
+        # get my top activity
+        items = self._get_top_activity(thresh)
+        page, start = self._get_top_activity_page_start(request)
+        
+        num_entries = len(items)
+        
+        # build table
+        rows = []
+        now = datetime.utcnow()
+        for entry in items[start:start+self._top_activity_items_per_page]:
+            date, xtype, item, parent = entry
+            if xtype == 'blogitem':
+                rows.append((blocks.blog.format_item_title(item, include_summary=False),
+                    blocks.user.display_name(item.author),
+                    format_ago(item.date, now)))
+            elif xtype == 'blogcomment':
+                rows.append((blocks.blog.format_comment_title(item, parent, include_summary=False),
+                    blocks.user.display_name(item.author),
+                    format_ago(item.date, now)))
+                    
+        
+        # dump table
+        blocks.util.format_table_rows(rows, headings=['Item', 'Author', 'Updated'])
+        
+        num_pages = (num_entries - 1) / self._top_activity_items_per_page + 1
+        if num_pages > 1:
+            '''<h2>%spage %s</h2>''' % (
+                blocks.util.get_pagenav(page, num_pages, '''<a href="?page=%s">'''),
+                page)
+
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "Top activity"           
+
+# ------------------------------------------------------------------------------------------
+
+class Feedback(QonBaseUI):
+
+    _q_exports = []
+    
+    def __init__(self, request, name):
+        self.user = get_user()
+        if not self.user:
+            raise AccessError
+        
+        blocks.util.set_section_mode(request, 'My feedback')
+        
+    def _q_index [html] (self, request):
+        title = 'ned.com: My feedback recipients'
+        blocks.util.header(request, title)
+        '''<h1>My feedback recipients</h1>
+        <p class="formHelp">
+        People to whom I've given feedback, organized in two lists: <a href="#pos">positive</a> and <a href="#neg">negative</a>.
+        </p>
+        <h2><a name="pos">Positive feedback recipients</a></h2>
+        <p class="formHelp">
+        People to whom I've given positive feedback, ranked in descending order of feedback given.
+        </p>
+        '''
+        
+        friends = self.user.karma_plus_given_to()
+        friends = sort_list(friends, lambda x: x.karma_points_from(self.user), count=500)
+        
+        cells = []
+        index = 1
+        for u in friends:
+            cells.append(index)
+            cells.append(blocks.user.display_name(u, karma=0))
+            cells.append(blocks.user.karma(u, show_title=0, show_control=0))
+            index += 1
+            
+        blocks.util.format_table(3, cells, headings=['Rank', 'Name', 'Feedback Score'])
+
+        '''    
+        <h2><a name="neg">Negative feedback recipients</a></h2>
+        <p class="formHelp">
+        People to whom I've given negative feedback, ranked in descending order of feedback given.
+        </p>
+        '''
+        users = self.user.karma_minus_given_to()
+        users = sort_list(users, lambda x: -(x.karma_points_from(self.user)), count=500)
+            
+        cells = []
+        index = 1
+        for u in users:
+            cells.append(index)
+            cells.append(blocks.user.display_name(u, karma=0))
+            cells.append(blocks.user.karma(u, show_title=0, show_control=0))
+            index += 1
+            
+        blocks.util.format_table(3, cells, headings=['Rank', 'Name', 'Feedback Score'])
+
+        blocks.util.footer()
+        
+    def get_crumb(self):
+        return "My feedback"      
+

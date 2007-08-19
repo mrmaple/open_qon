@@ -1,0 +1,488 @@
+"""
+$Id: ticket.ptl,v 1.27 2007/06/28 14:43:59 jimc Exp $
+"""
+__pychecker__ = "no-noeffect unusednames=request"
+from quixote.errors import TraversalError, AccessError
+from quixote import get_request
+from quixote.html import href
+from quixote.form2 import StringWidget, TextWidget, SingleSelectWidget
+from qon.base import get_user
+from qon import api
+from base import QonBaseUI
+from form import manage_form, manage_form_in_page, QonForm
+import blocks
+import qon.ticket
+
+from qon.ui import messages
+_ = messages.t
+def _h(x): return htmltext(_(x))
+
+class TrackersUI(QonBaseUI):
+    """UI for group's trackers."""
+    
+    _q_exports = ['new']
+    
+    def __init__(self, request, group):
+        self.group = group
+        self.trackers = self.group.trackers
+        self.path = path = blocks.group.path_to_group(self.group) + 'issues/'
+        blocks.util.set_global_mode(request, 'Groups')
+        blocks.util.set_group_mode(request, self.group, 'Issues')
+        
+        menus = [
+            {
+                'name': 'New Issue Tracker',
+                'path': 'new',
+                'title': 'Create a new issue tracker',
+            },
+            ]
+
+        blocks.util.set_menus(request, menus)
+        blocks.util.set_help_block(request, 'Issue Trackers')
+    
+    def _q_index [html] (self, request):
+        title = 'Issue trackers'
+        blocks.util.header(request, title)
+        
+        '<h1>%s</h1>' % title
+        if len(self.trackers):
+            format_trackers(self.trackers)
+        else:
+            '<p>No issue trackers. Use the menu to create a new issue tracker.</p>'
+        
+        blocks.util.footer()
+        
+    def _q_access(self, request):
+        if not self.group or not self.group.can_read(get_user()):
+            raise AccessError
+        
+    def _q_lookup(self, request, name):
+        try:
+            i = int(name)
+        except ValueError:
+            raise TraversalError
+        else:
+            return TrackerUI(request, self.group, i)
+        
+    def new [html] (self, request):
+        blocks.util.set_menu_mode(request, 'new')
+        title = 'Create new issue tracker'
+        user = get_user()
+        manage_form(request, NewTrackerForm,
+            page_title=title,
+            commit_title=title + ": changes saved.",
+            commit_text='<p class="info">Your changes have been recorded.</p>',
+            access_test=user and (not self.group or self.group.can_edit(user)),
+            access_sorry='<p class="alert">Sorry, you don\'t have permission to create a new tracker.</p>',
+            group=self.group,
+            )
+            
+    def get_crumb(self):
+        return 'Issue Trackers'
+
+class TrackerUI(QonBaseUI):
+    """UI for a single issue tracker."""
+    _q_exports = ['new', 'my', 'closed', 'watch', 'unwatch']
+    
+    def __init__(self, request, group, index):
+        self.group = group
+        
+        try:
+            self.tracker = group.trackers[index]
+        except IndexError:
+            raise TraversalError
+            
+        self.path = path = blocks.group.path_to_group(self.group) + 'issues/' \
+            + str(index) + '/'
+        
+        menus = [
+            {
+                'name': 'New Issue',
+                'path': 'new',
+                'title': 'Create a new issue',
+            },
+            {
+                'name': 'My Issues',
+                'path': 'my',
+                'title': "See issues you've created or issues assigned to you",
+            },
+            {
+                'name': 'Closed issues',
+                'path': 'closed',
+                'title': "See issues that have been resolved",
+            },
+            ]
+
+        blocks.util.set_menus(request, menus)
+        blocks.util.set_help_block(request, 'Issue Tracker')
+            
+        blocks.util.set_watchable_item(request, self.tracker)
+    
+    def _q_index [html] (self, request):
+        title = 'Issues'
+        blocks.util.header(request, title)
+        
+        '<h2>%s</h2>' % title
+
+        new = self.tracker.new_tickets()
+        if len(new):
+            '<p class="title">New issues</p>'
+            new = self.tracker.sort_by_modified(new)
+            format_tickets(new)
+        
+        active = self.tracker.active_tickets()
+        if len(active):
+            '<p class="title">Active issues</p>'
+            active = self.tracker.sort_by_modified(active)
+            format_tickets(active)
+        
+        if not (new or active):
+            '<p>No active issues. Create a new issue using the menu above.</p>'
+
+        """
+        <p class="title">Definitions</p>
+        <div>
+        new: issue has just been added <br />
+        open: issue needs more work <br />
+        assigned: assignee is working on it <br />
+        feedback: assignee thinks they are finished <br />
+        closed: work is complete <br /><br />
+
+        Pritority 1 is the highest, 5 is the lowest.<br />
+        An issue is assigned to the individual that changes the state to assigned.<br />
+        Only the asignee or a group owner can change the state to feedback.<br />
+        Only the issue originator or a group owner can close an issue.<br />
+        </div>
+        """
+
+        blocks.util.footer()
+        
+    def _q_lookup(self, request, name):
+        try:
+            i = int(name)
+        except ValueError:
+            raise TraversalError
+        else:
+            return TicketUI(request, self.group, self.tracker, i)
+        
+    def new [html] (self, request):
+        blocks.util.set_menu_mode(request, 'new')
+        title = 'Create new issue'
+        user = get_user()
+        manage_form(request, NewTicketForm,
+            page_title=title,
+            preview_text=_h(messages.preview_text),
+            commit_title=title + ": changes saved.",
+            commit_text='<p class="info">Your changes have been recorded.</p>',
+            access_test=user and (not self.group or self.group.can_edit(user)),
+            access_sorry='<p class="alert">Sorry, you don\'t have permission to create a new entry.</p>',
+            tracker=self.tracker,
+            user=user)
+            
+    def my [html] (self, request):
+        blocks.util.set_menu_mode(request, 'my')
+        user = get_user()
+        title = 'My issues'
+        blocks.util.header(request, title)
+        
+        '<h1>%s</h1>' % title
+        
+        owned = self.tracker.owned_tickets(user, only_open=1)
+        if len(owned):
+            '<p class="title">Issues I submitted</p>'
+            owned = self.tracker.sort_by_modified(owned)
+            format_tickets(owned)
+
+        feedback = self.tracker.feedback_tickets(user, only_open=1)
+        if len(feedback):
+            '<p class="title">Issues awaiting feedback from me</p>'
+            feedback = self.tracker.sort_by_modified(feedback)
+            format_tickets(feedback)
+
+        assigned = self.tracker.assigned_tickets(user, only_open=1)
+        if len(assigned):
+            '<p class="title">Issues assigned to me</p>'
+            assigned = self.tracker.sort_by_modified(assigned)
+            format_tickets(assigned)
+            
+        if not (owned or feedback or assigned):
+            '<p>No active issues relevant to me.</p>'
+
+        
+        blocks.util.footer()
+
+    def closed [html] (self, request):
+        blocks.util.set_menu_mode(request, 'closed')
+        title = 'Closed issues'
+        blocks.util.header(request, title)
+        
+        '<h2>%s</h2>' % title
+        
+        closed = self.tracker.closed_tickets()
+        if len(closed):
+            '<p class="title">Closed issues</p>'
+            closed = self.tracker.sort_by_modified(closed)
+            format_tickets(closed)
+
+        if not closed:
+            '<p>No closed issues.</p>'
+        
+        blocks.util.footer()
+
+    def watch(self, request):
+        return qon.ui.util.watch(request, self.tracker)
+        
+    def unwatch(self, request):
+        return qon.ui.util.unwatch(request, self.tracker)
+
+    def get_crumb(self):
+        return self.tracker.name
+
+
+        
+class TicketUI(QonBaseUI):
+    _q_exports = []
+    
+    def __init__(self, request, group, tracker, index):
+        self.group = group
+        self.tracker = tracker
+        self.ticket = tracker.get_ticket(index)
+        
+        blocks.util.prefix_menu_paths(request, '../')
+        blocks.util.set_help_block(request, 'Issue View')
+        
+    def _q_index [html] (self, request):
+        user = get_user()
+        title = self.ticket.title
+        blocks.util.header(request, title)
+        '<h2>%s</h2>' % title
+        format_ticket_info(self.ticket)
+        '<p>'
+        format_ticket_content(self.ticket.text)
+        '</p>'
+        
+        if self.group.can_edit(user):
+            '<p class="title">Update the issue:</p>'
+            if self.ticket.is_feedback():
+                '<p class="info">'
+                'If you are done providing feedback, change the status to <em>open</em> or <em>closed.</em>'
+                '</p>'
+            manage_form_in_page(EditTicketForm,
+                group=self.group,
+                tracker=self.tracker,
+                ticket=self.ticket)
+                
+        blocks.util.footer()
+
+def path_to_tracker(tracker):
+    return blocks.group.path_to_group(tracker.group) + 'issues/%s/' % \
+        tracker.group.trackers.index(tracker)
+        
+def format_tracker_name [html] (tracker):
+    href(path_to_tracker(tracker), tracker.name)
+
+def format_trackers [html] (trackers):
+    cells = []
+    for t in trackers:
+        cells.extend((
+            format_tracker_name(t),
+            len(t.active_tickets()) + len(t.new_tickets()),
+            ))
+    
+    headings = ['Name', 'Active tickets']
+    blocks.util.format_table(2, cells, headings)
+    
+    
+def format_tickets [html] (tickets):
+    cells = []
+    for t in tickets:
+        type = "P%i&nbsp;%s" % (t.priority, t.category)
+        status = t.status
+        if t.status == str("assigned") and t.assignee:
+            status += " to<br />" + t.assignee.display_name()
+
+        cells.extend((
+            status,
+            type,
+            blocks.util.format_datetime_shorter(t.date),
+            href('%s/' % t.get_index(), t.title),
+            blocks.user.display_name(t.user),
+            ))
+    
+    headings = ['Status', 'Importance', 'Date', 'Title', 'Submitted by']
+    blocks.util.format_table(len(headings), cells, headings)
+
+def format_ticket_info [html] (ticket):
+    '<p>'
+    '<span class="subtitle">By %s, %s</span>' % (blocks.user.display_name(ticket.user),
+        blocks.util.format_datetime(ticket.date))
+    if ticket.modified:
+        '<br /><span class="subtitle">Updated: %s</span>' % blocks.util.format_datetime(ticket.modified)
+    '<br />'
+    '<span class="subtitle">Status: %s priority %i %s</span>' % (ticket.status, ticket.priority, ticket.category)
+    if ticket.is_assigned() or ticket.assignee:
+        '<br />'
+        '<span class="subtitle">Assigned&nbsp;to: %s</span>' % blocks.user.display_name(ticket.assignee)
+    '</p>'
+
+def format_ticket_content [html] (text):
+    from quixote.html import nl2br
+    from dulcinea.ui.util import format_text
+    nl2br(format_text(text))
+    
+class NewTrackerForm(QonForm):
+    submit_button = 'submit-newtracker'
+    submit_buttons = [submit_button]
+    
+    def __init__(self, group):
+        QonForm.__init__(self)
+        self.group = group
+        self._build_form()
+        
+    def _build_form(self):
+        self.add(StringWidget, 'name', title="Name", required=True, size=32,
+            hint="Select a name for the new issue tracker.")
+        self.add_submit(self.submit_button, 'Create')
+
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.ticket_new_tracker(self.group, self['name'])
+        return get_request().redirect('./')
+
+class EditTicketForm(QonForm):
+    submit_button = 'submit-editticket'
+    submit_buttons = [submit_button]
+
+    def __init__(self, group, tracker, ticket):
+        QonForm.__init__(self)
+        self.group = group
+        self.tracker = tracker
+        self.ticket = ticket
+        self._build_form()
+
+    def _build_form(self):
+        self.add(SingleSelectWidget, 'priority', title='Priority',
+            options = qon.ticket.Ticket._priorities,
+            value = self.ticket.priority
+            )
+
+        self.add(SingleSelectWidget, 'category', title='Category',
+            options = qon.ticket.Ticket._categories,
+            value = self.ticket.category
+            )
+
+        self.add(SingleSelectWidget, 'status', title="Status",
+            options=qon.ticket.Ticket._valid_states,
+            value=self.ticket.status,
+            )
+
+        self.add(TextWidget, 'text', title="Comment", required=False,
+            rows=10, cols=70,
+            )
+        self.add_submit(self.submit_button, 'Submit')
+        
+    def validate(self):
+        if not QonForm.validate(self):
+            return False
+            
+        user = get_user()
+        
+        # check for valid state transitions (XXX should this be elsewhere?)
+        if self['status'] not in qon.ticket.Ticket._valid_states:
+            self.set_error('status', 'invalid status')
+            return False
+            
+        if self['status'] == 'new' and not self.ticket.is_new():
+            # cannot transition back to new from any state
+            if not self.ticket.is_new():
+                self.set_error('status', 'Cannot set state back to new')
+                return False
+        
+        if self['status'] == 'open' and not self.ticket.is_open() and not self.ticket.is_feedback():
+            # only group owners can set state to open, unless in feedback state
+            if not self.group.is_owner(user):
+                self.set_error('status', "Only group owners may set the status to 'open.'")
+                return False
+        
+        if self['status'] == 'assigned' and not self.ticket.is_assigned():
+            # anyone with write access can assign (to self)
+            if not self.group.can_edit(user):
+                self.set_error('status', "Only users who can edit the group may set the status to 'assigned.'")
+                return False
+
+        if self['status'] == 'feedback' and not self.ticket.is_feedback():
+            # only assignee and group owners can set status to feedback
+            if (user is not self.ticket.assignee) and not self.group.is_owner(user):
+                self.set_error('status', "Only the assignee may set the status to 'feedback.'")
+                return False
+                
+        if self['status'] == 'closed' and not self.ticket.is_closed():
+            # only group owners and originator can close ticket
+            if (user is not self.ticket.user) and not self.group.is_owner(user):
+                self.set_error('status', "Only the originator may set the status to 'closed.'")
+                return False
+                
+        return True
+
+    def commit(self):
+        user = get_user()
+        if self.get_submit() == self.submit_button:
+            if self['status'] != self.ticket.status:
+                # changing status
+                api.ticket_status_change(self.tracker, self.ticket, user,
+                    self['status'],
+                    self['category'],
+                    self['priority'],
+                    self['text'])
+            else:
+                api.ticket_add_comment(self.tracker, self.ticket, user, 
+                    self['category'],
+                    self['priority'],
+                    self['text'])
+
+        return get_request().redirect('../')
+
+class NewTicketForm(QonForm):
+    
+    submit_button = 'submit-newitem'
+    preview_button = 'preview-newitem'
+    submit_buttons = [submit_button, preview_button]
+
+    def __init__(self, tracker, user):
+        QonForm.__init__(self)
+        self.tracker = tracker
+        self.user = user
+        self._build_form()
+    
+    def _build_form(self):
+        self.add(StringWidget, 'title', title="Title", required=True, size=70)
+
+        self.add(SingleSelectWidget, 'priority', title='Priority',
+            options = qon.ticket.Ticket._priorities, value = 3)
+
+        self.add(SingleSelectWidget, 'category', title='Category',
+            options = qon.ticket.Ticket._categories, value = "feature")
+
+        self.add(TextWidget, 'intro', title="Text", required=False,
+            rows=15, cols=70)
+        self.add_submit(self.preview_button, 'Preview')
+        self.add_submit(self.submit_button, 'Save')
+
+    def preview [html] (self):
+        '<p><span class="title">Title: </span>%s<br />' % self['title']
+        '<span class="title">Text:</span><br />'
+        format_ticket_content(self['intro'])
+        '<br />'
+        '</p><hr noshade="noshade" />'
+        self.render()
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.ticket_new_item(self.tracker,
+                user=self.user,
+                title=self['title'],
+                category=self['category'],
+                priority=self['priority'],
+                text=self['intro'],
+                )
+        return get_request().redirect('./')

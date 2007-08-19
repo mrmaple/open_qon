@@ -1,0 +1,1022 @@
+h1, h2, h3, h4, h5, h6 { clear: both }
+
+/* plone style customizations */
+body {
+    font-family: 75% "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+}
+h1, h2, h3, h4, h5, h6 {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+}
+input {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+}
+pre {
+    font-size: 100%;
+}
+h1.group-name {
+    font-size: 180%;
+}
+
+.forum-listing
+{
+    font-size: 120%;
+}
+.forum-listing table {
+    width: 100%;
+}
+.forum-listing .listing td
+{
+    padding: 1.0em;
+}
+
+.user-listing
+{
+    font-size: 120%;
+}
+.user-listing .listing td
+{
+    padding: 0.5em;
+}
+
+.recentchanges-listing {
+    font-size: 120%;
+}
+
+.comment blockquote {
+    font-style: normal;
+}
+
+/* plone style extensions */
+
+.contentActions li.selected {
+    font-weight: bold;
+}
+
+.contentActions li.disabled {
+    color: silver;
+}
+
+.portlet .tighter {
+    padding: 0.5em;
+}
+
+/* rst/plone interactions */
+
+.document blockquote {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+    font-style: normal;
+    font-size: 100%;
+}
+
+blockquote {
+    font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
+    font-style: normal;
+    font-size: 100%;
+}
+
+
+/* ------------------------------------------- */
+
+/* colors */
+
+a {
+    color: #anchor-textcolor;
+}
+hr {
+    color: #globalnav-background;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    border-bottom: 1px solid #globalnav-border;
+}
+
+ul { 
+    list-style-image: url("/images/bullet.gif");
+}
+
+fieldset {
+    border: 1px solid #globalnav-border;
+}
+textarea {
+    border: 1px solid #globalnav-border;
+    width: auto ! important;
+}
+input {
+    border: 1px solid #globalnav-border;
+}
+select {
+    border: 1px solid #globalnav-border;  
+}
+code {
+    background-color: #code-pre-background;
+    border: 1px dashed #globalnav-border;
+}
+pre {
+    border: 1px dashed #globalnav-border;
+    background-color: #code-pre-background;
+}
+
+
+ 
+#portal-logo {
+    background: url("/images/logo.jpg") no-repeat;
+}
+#portal-logo a {
+    display: block;
+    text-decoration: none;
+    overflow: hidden;
+    border: 0;
+    margin: 0;
+    padding: 0;
+    padding-top: 87px;
+    height: 0px !important;
+    height /**/: 87px;
+    width: 219px;
+    cursor: pointer;
+}
+#portal-globalnav li a {
+    border-color: #globalnav-border;
+    color: #globalnav-textcolor;
+}
+#portal-globalnav li.selected a {
+    background-color: #globalnav-background;
+    border: 1px solid #globalnav-border;
+    border-bottom: #globalnav-background 1px solid;
+    color: #globalnav-textcolor;
+}
+#portal-globalnav li a:hover {
+    background-color: #globalnav-background;
+    border-color: #globalnav-border;
+    border-bottom-color: #globalnav-background;
+    color: #globalnav-textcolor;
+}
+#portal-personaltools {
+    background-color: #globalnav-background;
+    border-top-color: #globalnav-border;
+    border-bottom-color: #globalnav-border;
+}
+#portal-personaltools .portalUser {
+    background: transparent url("/images/user.gif") center left no-repeat;
+}
+ 
+#portal-personaltools li {
+    background: transparent url("/images/linkOpaque.gif") center left no-repeat;
+    color: #globalnav-textcolor;
+}
+#portal-personaltools li a {
+    color: #globalnav-textcolor;
+}
+#portal-breadcrumbs {
+    border-bottom-color: #globalnav-border;
+}
+.contentViews {
+    border-bottom-color: #contentnav-border;
+}
+.contentViews li a {
+    border: 1px solid #contentnav-border;
+    color: #contentnav-textcolor;
+}
+.contentViews .selected a {
+    background-color: #contentnav-background;
+    border-bottom: #contentnav-background 1px solid;
+    color: #contentnav-textcolor;
+}
+.contentViews li a:hover {
+    background-color: #contentnav-background;
+    color: #contentnav-textcolor;
+}
+
+/***
+.contentActions {
+    border-collapse: collapse;
+    background-color: #contentnav-background;
+    border-left: 1px solid #contentnav-border;
+    border-right: 1px solid #contentnav-border;
+    color: #contentnav-textcolor;
+    text-align: right;
+    text-transform: lowercase;
+    padding: 0 0 0 1em;
+    z-index: 2;
+    height: 1.2em;
+}
+***/
+.contentActions {
+    background-color: #contentnav-background;
+    border-left: 1px solid #contentnav-border;
+    border-right: 1px solid #contentnav-border;
+    color: #contentnav-textcolor;
+}
+
+/***
+.contentActions li {
+    float: right;
+    background-image: url("/images/arrowDownAlternative.gif");
+    background-repeat: no-repeat;
+    background-position: center right;
+    z-index: 4;
+    border-left: 1px solid #contentnav-border;
+    padding: 0 0 0 1em;
+    margin: 0 1em 0 0;
+}
+***/
+.contentActions li {
+    background-image: url("/images/arrowDownAlternative.gif");
+    background-repeat: no-repeat;
+    background-position: center right;
+}
+
+
+.contentActions a {
+    color: #contentnav-textcolor;
+}
+
+/***
+.contentActions .actionMenu {
+    visibility: hidden;
+    z-index: 5;
+    position: absolute;
+    top: 0;
+    right: -1px;
+    background: #contentnav-background;
+    overflow: hidden;
+    height: auto;
+    padding: 0;
+    margin: 1.2em 0 0 0;
+    border: 1px #contentnav-border;
+    border-style: none solid solid solid;
+}
+***/
+
+.contentActions .actionMenu {
+    background: #contentnav-background;
+    border: 1px #contentnav-border;
+    border-style: none solid solid solid;
+}
+
+.actionMenu li {
+    background-image: none;
+    border: none;
+}
+
+.actionMenu li a:hover {
+    background-color: #contentnav-textcolor;
+}
+
+.actionMenu .actionSeperator a {
+    border-top: 1px solid #contentnav-border;
+}
+.newsItem {
+    border-bottom: 1px solid #globalnav-border;
+}
+
+.newsAbout {
+    color: #93918c;
+}
+
+
+.documentEditable .documentContent {
+    border: 1px solid #contentnav-border;
+}
+
+.portalMessage {
+    background-color: #daff5a;
+    border: 1px solid #dae400;
+}
+.documentByLine {
+    color: #93918c;
+}
+.productCredits {
+    color: #93918c;
+}
+
+#portal-footer {
+    background-color: #globalnav-background;
+    border-top: 1px solid #globalnav-border;
+    border-bottom: 1px solid #globalnav-border;
+}
+
+.standalone,
+.documentEditable * .standalone {
+    background: #globalnav-background url("/images/linkOpaque.gif") 9px 1px no-repeat;
+}
+.context,
+.documentEditable * .context {
+    background: transparent url("/images/linkTransparent.gif") 9px 1px no-repeat;
+}
+.destructive,
+.documentEditable * .destructive {
+    background: #daff5a url("/images/linkTransparent.gif") 9px 1px no-repeat;
+    border: 1px solid #dae400;  
+}
+input.searchButton {
+    background: White url("/images/search_icon.gif") 2px 1px no-repeat;
+
+}
+.notify,
+.documentEditable * .notify {
+    border: 1px solid #dae400;  
+}
+
+.fieldRequired {
+    background: url("/images/required.gif") center left no-repeat;
+} 
+
+.formHelp {
+    color: #93918c;
+}
+
+.error {
+    /* Class for error indication in forms */
+    background-color: #daff5a;
+    border: 1px solid #dae400;
+}
+
+.error .fieldRequired {
+   color: #daff5a;
+} 
+
+.card {
+    background-color: #globalnav-background;
+    border-color: #globalnav-border;
+}
+
+.portrait {
+    background-color: #globalnav-background;
+    border-color: #globalnav-border;
+}
+
+.listing,
+.stx table {
+    border-left: 1px solid #globalnav-border;
+    border-bottom: 1px solid #globalnav-border;
+}
+.listing th,
+.stx table th {
+    background: #globalnav-background;
+    border-top: 1px solid #globalnav-border;
+    border-bottom: 1px solid #globalnav-border;
+    border-right: 1px solid #globalnav-border;
+}
+.listing .even {
+    background-color: #ffffbb;
+}
+.listing td,
+.stx table td {
+    border-right: 1px solid #globalnav-border;
+}
+.stx table  /* stupid STX table workaround */
+{
+    border: 1px solid #globalnav-border ! important;
+}
+.stx table td {
+    border-bottom: 1px solid #globalnav-border;
+}
+.portlet h5 { 
+    background: #ffff99;
+    border: 1px solid #globalnav-border;
+    border-style: solid solid none solid;
+}
+.portlet h6 { 
+    background: #ffff99;
+    border: 1px solid #globalnav-border;
+    border-style: solid solid none solid;
+}
+
+.portletBody {
+    border: 1px solid #globalnav-border;
+}
+.portletClose {
+    border-left: 1px solid #globalnav-border;
+}
+.portlet .even {
+    background-color: #ffffbb;
+}
+.comment {
+    background: #ffffee; 
+    border: 1px dashed #globalnav-border; 
+}
+
+.comment h1,
+.comment h2,
+.comment h3,
+.comment h4, 
+.comment h5,
+.comment h6 {
+    border-bottom: 1px dashed #93918c;
+}
+.even {
+    background-color: #ffffbb;
+}
+.visualHighlight {
+    background-color: #ffffbb;
+}
+
+.discreet {
+    color: #93918c;
+}
+
+.preview {
+    color: #505050;
+    font-size: 90%;
+    line-height: normal;
+}
+
+
+.listingBar {
+    background-color: #globalnav-background;
+    border-color: #globalnav-border;
+}
+.link-parent {
+    background: transparent url("/images/arrowUp.gif") 4px 5px no-repeat;
+}
+
+.link-user {
+    background: transparent url("/images/user.gif") 0 1px no-repeat;
+}
+
+.link-external {
+    background: transparent url("/images/link_icon.gif") 0px 1px no-repeat;
+}
+
+.link-https {
+    background: transparent url("/images/lock_icon.gif") 0px 1px no-repeat;
+}
+
+.link-mailto {
+    background: transparent url("/images/mail_icon.gif") 0px 1px no-repeat;
+}
+
+.link-news {
+    background: transparent url("/images/topic_icon.gif") 0px 1px no-repeat;
+}
+
+.link-ftp {
+    background: transparent url("/images/file_icon.gif") 0px 1px no-repeat;
+}
+
+.link-irc {
+    background: transparent url("/images/discussionitem_icon.gif") 0px 1px no-repeat;
+}
+
+.link-callto {
+    background: transparent url("/images/phone_icon.gif") 0px 1px no-repeat;
+}
+
+.link-comment {
+    background: transparent url("/images/discussionitem_icon.gif") center left no-repeat;
+}
+
+.optionsToggle {
+    border: 1px solid #globalnav-border;
+    background-color: #globalnav-background;
+}
+
+#portal-column-content fieldset > * input:focus,
+#portal-column-content fieldset > * textarea:focus {
+    border-color: #dae400; 
+}
+.ploneCalendar {
+    border: 1px solid #globalnav-border;
+}
+.ploneCalendar th {
+    background-color: #globalnav-background;
+}
+.ploneCalendar .weekdays td {
+    background-color: #globalnav-background;
+    border: 1px solid #globalnav-border;
+    border-style: solid none;
+}
+.ploneCalendar .event {
+    background-color: #globalnav-background;
+}
+.ploneCalendar .todayevent {
+    background-color: #globalnav-background;
+    border: 2px solid #dae400;
+}
+.ploneCalendar .todaynoevent {
+    border: 2px solid #dae400;
+}
+
+
+/* ------------------------------------------- */
+
+/* rst styles */
+
+/*
+:Author: David Goodger
+:Contact: goodger@users.sourceforge.net
+:date: $Date: 2004/10/05 02:44:03 $
+:version: $Revision: 1.3 $
+:copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+*/
+
+.first {
+  margin-top: 0 }
+
+.last {
+  margin-bottom: 0 }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dd {
+  margin-bottom: 0.5em }
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.attention, div.caution, div.danger, div.error, div.hint,
+div.important, div.note, div.tip, div.warning, div.admonition {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.hint p.admonition-title, div.important p.admonition-title,
+div.note p.admonition-title, div.tip p.admonition-title,
+div.admonition p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em }
+
+div.footer, div.header {
+  font-size: smaller }
+
+div.sidebar {
+  margin-left: 1em ;
+  border: medium outset ;
+  padding: 0em 1em ;
+  background-color: #dee7ec ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+h1 { font-size: 1.7em;}
+
+/*
+hr {
+  width: 75% }
+*/
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font-family: serif ;
+  font-size: 100% }
+
+pre.line-block {
+  font-family: serif ;
+  font-size: 100% }
+
+pre.literal-block, pre.doctest-block {
+  margin-left: 2em ;
+  margin-right: 2em ;
+  background-color: #eeeeee }
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.option-argument {
+  font-style: italic }
+
+/* FIXME this needs to be disabled for IE6 displaying very wide
+pages, but disabling this probably breaks something else
+
+span.pre {
+  white-space: pre }
+***/
+
+
+span.problematic {
+  color: red }
+
+table {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em;
+  border-collapse: collapse; 
+  }
+
+table.citation {
+  border-left: solid thin gray ;
+  padding-left: 0.5ex }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.footnote {
+  border-left: solid thin black ;
+  padding-left: 0.5ex }
+
+td, th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+th.docinfo-name, th.field-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap }
+
+h1 tt, h2 tt, h3 tt, h4 tt, h5 tt, h6 tt {
+  font-size: 100% }
+
+tt {
+  background-color: #eeeeee }
+
+ul.auto-toc {
+  list-style-type: none }
+
+
+/* qon styles */
+
+.topheading	{ font-weight: bold; font-size: 1.8em; border-bottom: 1px solid #globalnav-border; }
+
+.indent {
+    display: block;
+    margin-top: 1em;
+    margin-left: 3em;
+    margin-bottom: 1em;
+    margin-right: 3em;
+}
+
+div.header {
+    background: gray;
+    color: white;
+    font-size: large;
+    padding: 1ex;
+}
+
+a.newwikipage { text-decoration: none; border-bottom: dashed 1px; }
+
+td.title
+/*th*/		{ font-weight: bold; }
+td.smaller	{ font-size: 0.8em; }
+td.gray		{ font-size: 0.8em; color: gray; }
+
+table.groups { 
+    border-collapse: collapse;
+    width: 100%;
+}
+table.groups td { width: 50%; padding: 0em 1em; vertical-align: top; }
+table.groups th { width: 50%; padding: 0em 1em; text-align: left;  }
+
+
+div.menu	{ padding: 0.2em; border: solid 1px gray; width: 95% }
+div.smallmenu {
+    padding: 0.2em; border: solid 1px gray; font-size: 1.0em;
+}
+    
+div.groupbar {
+    background-color: transparent;
+    border-collapse: collapse;
+    padding: 0.15em 0.15em 0.15em 0.15em;
+    white-space: nowrap;
+    list-style: none;
+    margin: 0;
+    height: auto;
+    line-height: normal;
+
+    color: #contentnav-textcolor;
+    background-color: #contentnav-background;
+    border: 1px solid #contentnav-border;
+
+    border-bottom: #contentnav-background 1px solid;
+}
+div.groupbar a {
+    background-color: #contentnav-background;
+    border-bottom: #contentnav-background 1px solid;
+    color: #contentnav-textcolor;
+}
+div.groupbar a:hover {
+    background-color: #contentnav-background;
+    color: #contentnav-textcolor;
+}
+
+div.groupbar table { 
+    border-collapse: collapse;
+    padding: 0em;
+    width: 100%;
+}
+
+div.groupbar table td.grouptitle {
+    color: #contentnav-textcolor;
+    background-color: #contentnav-background;
+    font-size: 1.2em;    
+}
+div.groupbar table td.groupsections {
+    color: #contentnav-textcolor;
+    background-color: #contentnav-background;
+    font-size: 1.1em;
+    text-align: right;
+}
+
+div.groupsummary {
+    border-collapse: collapse;
+    padding: 0.5em 0.5em 0.5em 0.5em;
+    /*white-space: nowrap;*/
+    /*list-style: disc;*/
+    /*margin: 0;*/
+    height: auto;
+    line-height: normal;
+
+    border: 1px solid #contentnav-border;
+
+    font-size: 0.9em;
+    background-color: white;
+}
+
+div.groupsummary table {
+    border-collapse: collapse;
+    padding: 0em;
+    /*width: 100%;*/
+}
+
+div.groupsummary table td {
+    vertical-align: top;
+    /*width: 50%;*/
+}
+
+/*
+div.groupsummary table td li {
+    font-size: 0.9em;
+}
+*/
+div.bottommenu {
+    border-collapse: collapse;
+    padding: 0em 0em 0em 0em;
+    /*white-space: nowrap;*/
+    list-style: none;
+    margin: 0;
+    height: auto;
+    line-height: normal;
+
+    border: 1px solid #globalnav-border;
+
+    color: #anchor-textcolor;
+    font-size: 0.9em;
+
+    background-color: white;
+    border-bottom: #globalnav-border 1px solid;
+}
+
+div.forum-item-info {
+    /* used when forum item info is presented in a list */
+    border-bottom: #globalnav-border 1px solid;
+}
+
+div.forum-item-heading {
+    /* used when forum item is followed by text */
+}
+
+div.forum-item-text {
+    border-bottom: #globalnav-border 1px solid;
+}
+        
+div.tabmenu	{ padding: 0.2em; border: solid 1px gray; }
+div.box		{ padding: 0.2em; border: solid 1px gray; width: 100% }
+
+span.negnum	{ color: red; }
+span.posnum	{ color: green; }
+span.alert	{ color: red; }
+span.info	{ color: green; }
+
+span.seltab { font-weight: bold; }
+span.unseltab { font-weight: normal; }
+
+.banner		{ font-size: 2.0em; font-weight: bold; }
+.note		{ color: olive; font-size: 0.8em; }
+.alert		{ color: red; font-weight: bold; }
+.info		{ color: green; font-weight: bold; }
+.dimtitle	{ font-weight: bold; color: gray; }
+.disabled	{ font-weight: normal; color: silver; }
+.heading	{ font-weight: bold; font-size: 1.6em;}
+.explanation	{ font-size: 0.8em;  }
+
+p.title,
+span.title  { font-weight: bold; }
+span.readtitle { font-weight: normal; }
+p.subtitle,
+span.subtitle	{ font-size: 0.9em; }
+
+.forum-listing .subtitle {
+    font-size: 0.85em;
+}
+
+span.grouptitle { font-size: 1.2em; }
+div.groupsections { float: right; font-size: 1.0em; }
+
+.pagenavigation {
+    text-align: right;
+    float: right;
+    font-size: 50%;
+    margin-left: 1em;
+}
+
+.pagenumbers {
+    font-size: 150%;
+
+}
+
+.search_document_age {
+    color: #908267;        /* omidyar network logo brown */
+    font-size: 85%;
+    font-weight: normal;
+}
+
+.sortselector {
+    text-align: right;
+    float: right;
+    font-size: 75%;
+    margin-left: 1em;
+}              
+
+
+/* quixote form2 css.py */
+form.quixote div.title {
+    font-weight: bold;
+}
+
+form.quixote br.submit,
+form.quixote br.widget,
+br.quixoteform {
+    clear: left;
+}
+
+form.quixote div.submit br.widget {
+    display: none;
+}
+
+form.quixote div.widget {
+    float: left;
+    padding: 4px;
+    padding-right: 1em;
+    margin-bottom: 6px;
+}
+
+/* pretty forms (attribute selector hides from broken browsers (e.g. IE) */
+form.quixote[action] {
+    float: left;
+}
+
+form.quixote[action] > div.widget {
+    float: none;
+}
+
+form.quixote[action] > br.widget {
+    display: none;
+}
+
+form.quixote div.widget div.widget {
+    padding: 0;
+    margin-bottom: 0;
+}
+
+form.quixote div.SubmitWidget {
+    float: left
+}
+
+form.quixote div.content {
+    margin-left: 0.6em; /* indent content */
+}
+
+form.quixote div.content div.content {
+    margin-left: 0; /* indent content only for top-level widgets */
+}
+
+form.quixote div.error {
+    color: #c00;
+    font-size: small;
+    margin-top: .1em;
+}
+
+form.quixote div.hint {
+    font-size: small;
+    font-style: italic;
+    margin-top: .1em;
+}
+
+form.quixote div.errornotice {
+    color: #c00;
+    padding: 0.5em;
+    margin: 0.5em;
+}
+
+form.quixote div.FormTokenWidget,
+form.quixote.div.HiddenWidget {
+    display: none;
+}

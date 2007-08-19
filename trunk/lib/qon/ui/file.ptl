@@ -1,0 +1,789 @@
+"""
+$Id: file.ptl,v 1.49 2006/07/13 04:55:37 alex Exp $
+"""
+__pychecker__ = "no-noeffect unusednames=request"
+import os
+from ZODB.POSException import POSKeyError
+from quixote import get_request, get_user
+from quixote.errors import AccessError, TraversalError
+from quixote.html import href, url_quote
+from quixote.form2 import FileWidget, StringWidget
+from dulcinea.database import pack_oid, unpack_oid
+from qon import api
+from qon.base import get_connection
+from qon.ui import blocks
+from qon.ui.form import QonForm, manage_form, manage_form_in_page
+from qon.file import QonFile, QonDir
+from qon.ui.base import QonBaseUI
+from qon.util import get_oid, sort_list
+from datetime import datetime
+import qon.local
+
+from qon.ui import messages
+_ = messages.t
+def _h(x): return htmltext(_(x))
+
+def format_file_size [html] (size):
+    if size is None:
+        size = 'file missing'
+    elif size > 1024*1024:
+        size = str('%.1f MB') % (size/1024.0/1024)
+    elif size > 4096:
+        size = str('%.1f KB') % (size/1024.0)
+    else:
+        size = str('%i bytes') % size
+    return size
+    
+
+class FileUI(QonBaseUI):
+
+    _q_exports = ['mkdir', 'upload', 'rename', 'delete', 'move', 'move_submit']
+    
+    def __init__(self, request, group, dir_oid=None, parent_dir=None, path=''):
+        self.request = request
+        self.group = group
+        self.parent_dir = parent_dir
+        self.path = path
+        self.url = blocks.group.path_to_group(self.group) + 'file/'
+
+        blocks.util.set_global_mode(request, 'Groups')
+        blocks.util.set_group_mode(request, self.group, 'Files')
+        
+        if dir_oid:
+            try:
+                self.dir = get_connection()[pack_oid(long(dir_oid))]
+            except (ValueError, KeyError, POSKeyError):
+                # dir_oid is invalid (ValueError: not an int) or incorrect (KeyError: not found)
+                raise TraversalError
+            else:
+                if not isinstance(self.dir, QonDir):
+                    # since we're looking up by OID, make sure we didn't get another
+                    # object by hacking the URL
+                    raise TraversalError
+        else:
+            self.dir = self.group.file_db.dirs
+        
+        is_subfolder = self._is_subfolder()
+
+        sort_key = request.get_form_var('s') or 'date'      # name, size, date, owner (default to date)
+        sort_order = request.get_form_var('o') or 'desc'    # asc, desc (default to desc)        
+
+        menus = [
+            {
+                'name': _('Up'),
+                'path': '../',
+                'title': _('Navigate up one level'),
+                'disabled': not is_subfolder,
+            },
+            {
+                'name': _('Upload'),
+                'path': 'upload',
+                'title': _('Add a file to the file library'),
+                'disabled': not get_user() or not self.group.can_edit(get_user()),
+            },
+            {
+                'name': _('New folder'),
+                'path': 'mkdir',
+                'title': _('Create a new folder in the file library'),
+                'disabled': not get_user() or not self.group.can_edit(get_user()),
+            },
+            {
+                'name': _('Delete folder'),
+                'path': 'delete',
+                'title': _('Delete this folder (only when empty)'),
+                'disabled': not is_subfolder or not self.group.can_edit(get_user()),
+            },
+            {
+                'name': _('Rename folder'),
+                'path': 'rename',
+                'title': _('Change the name of this folder'),
+                'disabled': not is_subfolder or not self.group.can_edit(get_user()),
+            },
+            {
+                'name': _('Move files'),
+                'path': 'move?s=%s&o=%s' % (sort_key, sort_order),
+                'title': _('Move files to other folders'),
+                'disabled': not get_user() or not self.group.can_edit(get_user()),
+            },            
+            ]
+
+        blocks.util.set_menus(request, menus)
+        blocks.util.set_help_block(request, _('Files'))
+        
+    def _q_access(self, request):
+        if self.group is None or self.dir is None:
+            raise TraversalError
+
+        if not self.group.can_read(get_user()):
+            raise AccessError
+            
+        if not self.group.is_accepted():
+            raise AccessError, \
+                _('<p class="alert">Sorry, this feature is not available until this group is active.</p>')
+
+    def _q_index [html] (self, request):
+        db = self.group.file_db
+        title = blocks.group.display_name_plain(self.group) + ' ' + _('Files')
+        if self._is_subfolder():
+            title += ': ' + blocks.util.format_string(self.dir.filename)
+                
+        blocks.util.header(request, title)
+        '<h1>%s</h1>' % title
+
+        '<p class="subtitle">'
+        '<span class="title">'
+        _('Total size:')
+        ' '
+        '</span>'
+        format_file_size(db.total_size())
+        '/'
+        format_file_size(db.quota)
+        '<br />'
+        '<span class="title">'
+        _('Space available:')
+        ' '
+        '</span>'
+        format_file_size(db.quota - db.total_size())
+        '</p>'
+        self._file_list(request)
+        blocks.util.footer()
+    
+    def _q_lookup(self, request, component):
+        if component.find('.') != -1:
+            """There are no dots in directory ids."""
+            return FileInfoUI(request, self.group, component, self.dir, path=self.path+'../')
+        else:
+            return FileUI(request, self.group, component, parent_dir=self.dir, path=self.path+'../')
+            
+    def _is_subfolder(self):
+        return self.dir is not self.group.file_db.dirs
+        
+    def get_crumb(self):
+        if self.dir is not None:
+            if not self._is_subfolder():
+                return _('Files')
+            else:
+                return self.dir.filename
+        return ''
+        
+    def upload [html] (self, request):
+        if not get_user() or not self.group.can_edit(get_user()):
+            raise AccessError
+        
+        import qon.local
+            
+        manage_form(request, UploadForm,
+            page_title=_('Upload a file'),
+            group=self.group,
+            access_test = not qon.local.NO_FILE_UPLOAD,
+            access_sorry='''<p class="alert">Sorry, uploading files is temporarily disabled. Please try again later.</p>''',
+            dir=self.dir)
+            
+    def mkdir(self, request):
+        if not get_user() or not self.group.can_edit(get_user()):
+            raise AccessError
+            
+        api.file_new_directory(self.group, self.dir)
+        return request.redirect('./')
+        
+    def delete [html] (self, request):
+        if not get_user() or not self.group.can_edit(get_user()):
+            raise AccessError
+            
+        manage_form(request, DeleteDirForm,
+            page_title=_('Deleting folder:') + ' %s' % self.dir.filename,
+            heading_text='<p class="alert">'+_('Are you sure you want to delete this folder?')+'</p>',
+            access_test=self._is_subfolder() and self.group.file_db.is_empty(self.dir),
+            access_sorry='<p class="alert">' + _('You cannot delete a directory which is not empty, or the top folder.') + '</p>',
+            group=self.group,
+            dir=self.dir,
+            parent_dir=self.parent_dir)
+
+    def rename [html] (self, request):
+        if not get_user() or not self.group.can_edit(get_user()):
+            raise AccessError
+            
+        manage_form(request, RenameDirForm,
+            page_title=_('Renaming folder:') + ' %s' % self.dir.filename,
+            access_test=self._is_subfolder(),
+            access_sorry='<p class="alert">'+_('You cannot rename the top folder.')+'</p>',
+            group=self.group,
+            dir=self.dir)
+
+    def move [html] (self, request):
+        sort_key = request.get_form_var('s') or 'date'      # name, size, date, owner (default to date)
+        sort_order = request.get_form_var('o') or 'desc'    # asc, desc (default to desc)
+        
+        # process form if this is a submission
+        submission_error = False
+        if request.get_form_var('submit-movefiles'):
+            targets = request.get_form_var('target')
+            destination = request.get_form_var('destination')
+            if targets and destination:
+                if type(targets) is not list:
+                    targets = [targets]
+                targets = [get_oid(pack_oid(long(t))) for t in targets]
+                destination = get_oid(pack_oid(long(destination)))
+                api.file_move(self.group, targets, destination)
+                return get_request().redirect(str('./move?s=%s&o=%s' % (sort_key, sort_order)))
+            else:
+                submission_error = True
+        elif request.get_form_var('cancel-movefiles'):
+            return get_request().redirect(str('./?s=%s&o=%s' % (sort_key, sort_order)))
+
+        # otherwise show the form
+        menus = []
+        blocks.util.set_menus(request, menus)
+        title = blocks.group.display_name_plain(self.group) + ' ' + _('Files')
+        if self._is_subfolder():
+            title += ': ' + blocks.util.format_string(self.dir.filename)
+                
+        blocks.util.header(request, title)
+        '<h1>%s</h1>' % title
+
+        if submission_error:
+            """
+            <br /><div class="alert">Error: You must select items to move and a destination folder.</div>
+            """
+
+        # output form (not using quixote forms2, because I need fine control over placement of elements)
+        action_url = get_request().get_url()
+        """
+        <br />
+        <form action="%s" method="post">
+        <div class="submit"><div class="SubmitWidget widget">
+        <input type="submit" name="submit-movefiles" value="Move files" />
+        <input type="submit" name="cancel-movefiles" value="I'm done with moving files" />        
+        </div></div>
+        <input type="hidden" name="s" value="%s" />
+        <input type="hidden" name="o" value="%s" />        
+        """ % (action_url, sort_key, sort_order)
+
+        # output encompassing table
+        """
+        <table><tr>
+        """
+
+        # left column
+        '<td>'
+        cells = []
+        files = self.dir[:]
+
+        # handle sorting
+        if sort_key == 'name':
+            files = self._sort_by_name(files, sort_order=='desc')
+        elif sort_key == 'size':
+            files = self._sort_by_size(files, sort_order=='desc')        
+        elif sort_key == 'date':
+            files = self._sort_by_date(files, sort_order=='desc')             
+        elif sort_key == 'owner':
+            files = self._sort_by_owner(files, sort_order=='desc')
+
+        for file in files:
+            checkbox = '<input type="checkbox" name="target" value="%s" />' % str(unpack_oid(file._p_oid))
+            if isinstance(file, QonFile):
+                path = file.path
+                path = path.replace(str('/'), str('.'))
+                icon = '<img src="/images/file_icon.gif" alt="file" title="file" height="16" width="16" />'
+                cell = [
+                    checkbox + '&nbsp;' + icon + '&nbsp;' + href('%s/' % url_quote(path), blocks.util.format_string(file.filename))
+                   ]
+            elif isinstance(file, QonDir):
+                icon = '<img src="/images/folder_icon.gif" alt="folder" title="folder" height="16" width="16" />'                
+                cell = [
+                    checkbox + '&nbsp;' + icon + '&nbsp;' + href('%s/' % str(unpack_oid(file._p_oid)), blocks.util.format_string(file.filename))
+                    ]
+            cells.extend(cell)
+            
+        blocks.util.format_table(1, cells, headings=[_('File/Folder')])
+        '</td>'
+
+        # right column        
+        '<td>'
+        cells = []
+        self._traverse_dir(self.group.file_db.dirs, cells)
+        blocks.util.format_table(1, cells, headings=[_('Destination Folder')])
+        '</td>'
+
+        """
+        </tr></table>
+        <div class="submit"><div class="SubmitWidget widget">
+        <input type="submit" name="submit-movefiles" value="Move files" />
+        <input type="submit" name="cancel-movefiles" value="I'm done with moving files" />                
+        </div></div>                
+        </form>
+        """
+        
+        blocks.util.footer()
+
+    def _traverse_dir [html] (self, dir, cells, current_depth=0):
+        radiobutton = '<input type="radio" name="destination" value="%s" />' % unpack_oid(dir._p_oid)
+        icon = '<img src="/images/folder_icon.gif" alt="folder" title="folder" height="16" width="16" />'
+        folder_name = dir.filename
+        if dir is self.group.file_db.dirs:
+            folder_name = '/'
+        padding = ''
+        for x in range(current_depth):
+            padding += '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'
+        cell = [
+            padding + radiobutton + '&nbsp;' + icon + '&nbsp;' + href('%s/' % unpack_oid(dir._p_oid), blocks.util.format_string(folder_name))
+            ]
+        cells.extend(cell)
+
+        # recurse through children        
+        files = dir[:]
+        files.reverse()
+        for file in files:
+            if isinstance(file, QonDir):            
+                self._traverse_dir(file, cells, current_depth+1)
+
+    def _sort_by_date (self, files, desc=True):
+        dates = {}
+        for file in files:
+            if isinstance(file, QonFile):
+                dates[file] = file.date
+            else:
+                dates[file] = datetime.utcnow()    # have to give the folder a "date" for sorting 
+        return sort_list(files, lambda x: dates[x], reverse=desc)
+
+    def _sort_by_name (self, files, desc=True):
+        return sort_list(files, lambda x: x.filename.lower(), reverse=desc)
+
+    def _sort_by_size (self, files, desc=True):
+        sizes = {}
+        for file in files:
+            if isinstance(file, QonFile):
+                sizes[file] = file.get_size() or 0
+            else:
+                sizes[file] = 0                     # have to give the folder a "size" for sorting      
+        return sort_list(files, lambda x: sizes[x], reverse=desc)
+
+    def _sort_by_owner (self, files, desc=True):
+        owners = {}
+        for file in files:
+            if isinstance(file, QonFile):
+		if file.owner:
+                	owners[file] = file.owner.display_name().lower()
+		else:
+			owners[file] = '*no user*'
+            else:
+                owners[file] = ''                     # have to give the folder an "owner" for sorting      
+        return sort_list(files, lambda x: owners[x], reverse=desc)
+    
+    def _file_list [html] (self, request):
+        files = self.dir[:]
+
+        # establish column headings with default hrefs
+        columns = [
+            href('./?s=name&o=asc', _('File/Folder')),
+            _('Description'),
+            href('./?s=size&o=asc', _('Size')),
+            href('./?s=date&o=desc', _('Date')),
+            href('./?s=owner&o=asc', _('Submitted by'))
+            ]
+
+        # handle sorting
+        sort_key = request.get_form_var('s') or 'date'      # name, size, date, owner (default to date)
+        sort_order = request.get_form_var('o') or 'desc'    # asc, desc (default to desc)
+        if sort_key == 'name':
+            files = self._sort_by_name(files, sort_order=='desc')
+            if sort_order == 'asc':
+                columns[0] = href('./?s=name&o=desc', _('File/Folder'))
+        elif sort_key == 'size':
+            files = self._sort_by_size(files, sort_order=='desc')
+            if sort_order == 'asc':
+                columns[2] = href('./?s=size&o=desc', _('Size'))            
+        elif sort_key == 'date':
+            files = self._sort_by_date(files, sort_order=='desc')
+            if sort_order == 'desc':
+                columns[3] = href('./?s=date&o=asc', _('Date'))               
+        elif sort_key == 'owner':
+            files = self._sort_by_owner(files, sort_order=='desc')
+            if sort_order == 'asc':
+                columns[4] = href('./?s=owner&o=desc', _('Submitted by'))                
+            
+        cells = []
+        for file in files:
+            if isinstance(file, QonFile):
+                path = file.path
+                path = path.replace(str('/'), str('.'))
+                icon = '<img src="/images/file_icon.gif" alt="file" title="file" height="16" width="16" />'
+                cell = [
+                    icon + '&nbsp;' + href('%s/' % url_quote(path), blocks.util.format_string(file.filename)),
+                    blocks.util.format_string(file.description, 40),
+                    format_file_size(file.get_size()),
+                    blocks.util.format_datetime_short(file.date),
+                    blocks.user.display_name(file.owner),
+                   ]
+            elif isinstance(file, QonDir):
+                icon = '<img src="/images/folder_icon.gif" alt="folder" title="folder" height="16" width="16" />'                
+                cell = [
+                    icon + '&nbsp;' + href('%s/' % unpack_oid(file._p_oid), blocks.util.format_string(file.filename)),
+                    _('Folder'),
+                    '',
+                    '',
+                    ''
+                    ]
+            cells.extend(cell)
+            
+        blocks.util.format_table(5, cells, headings=[columns[0], columns[1], columns[2], columns[3], columns[4]])
+
+    
+class FileInfoUI(QonBaseUI):
+
+    _q_exports = ['replace', 'delete']
+    cache_time = 24*3600
+    
+    def __init__(self, request, group, component, dir, path):
+        self.group = group
+        self.dir = dir
+        self.path = component.replace('.', '/')
+        
+        try:
+            self.stored_file = self.group.file_db.get_file(self.path)
+        except KeyError:
+            raise TraversalError
+            
+        self.global_path = path
+        
+        menus = [
+            {
+                'name': _('Back'),
+                'path': '../',
+                'title': _('Go back to list of files'),
+            },
+            {
+                'name': _('Download'),
+                'path': 'get/',
+                'title': _('Download this file to your computer'),
+            },
+            {
+                'name': _('Replace'),
+                'path': 'replace',
+                'title': _('Upload a new version of this file, without changing its web address.'),
+                'disabled': not self.can_delete()
+            },
+            {
+                'name': _('Delete'),
+                'path': 'delete',
+                'title': _('Delete this file'),
+                'disabled': not self.can_delete()
+            },
+            ]
+
+        blocks.util.set_menus(request, menus)
+        blocks.util.set_help_block(request, _('File Information'))
+        
+    def _q_index [html] (self, request):
+        title = self.stored_file.filename
+    
+        blocks.util.header(request, title)
+        '<h1>%s</h1>' % title
+        # 'referrer: %s<br/>' % request.get_header(str('HTTP_REFERER'))
+        '<p class="subtitle">'
+        '<span class="title">'
+        _('Filename:')
+        ' </span>%s' % \
+            href('get/%s' % url_quote(self.stored_file.filename), self.stored_file.filename)
+        '<br />'
+        '<span class="title">'
+        _('Submitted by:')
+        ' </span>%s' % \
+            blocks.user.display_name(self.stored_file.owner)
+        '<br />'
+        '<span class="title">'
+        _('Date:')
+        ' </span>%s' % \
+            blocks.util.format_datetime(self.stored_file.date)
+        '<br />'
+        '<span class="title">'
+        _('Size:')
+        ' </span>%s' % \
+            format_file_size(self.stored_file.get_size())
+        '</p>'
+        
+        manage_form_in_page(FileInfoForm,
+            group=self.group,
+            file=self.stored_file)
+            
+        blocks.util.footer()
+        
+    def _q_lookup(self, request, component):
+        if component == 'get':
+            return FileGetterUI(self.stored_file)
+        return None
+        
+    def get_crumb(self):
+        return self.stored_file.filename
+        
+    def replace [html] (self, request):
+        if not get_user() or not self.group.can_edit(get_user()):
+            raise AccessError
+        
+        import qon.local
+            
+        manage_form(request, UploadReplaceForm,
+            page_title=_('Upload a replacement file'),
+            heading_text='''<p><span class="alert">Warning:</span> You are about to replace the existing file (%s) with a new version from your computer.</p>''' % self.stored_file.filename,
+            access_test = not qon.local.NO_FILE_UPLOAD,
+            access_sorry='''<p class="alert">Sorry, uploading files is temporarily disabled. Please try again later.</p>''',
+            group=self.group,
+            dir=self.dir,
+            path=self.path,
+            )
+            
+    def delete [html] (self, request):
+        manage_form(request, DeleteFileForm,
+            page_title=_('Deleting file:')+' %s' % self.stored_file.filename,
+            heading_text='<p class="alert">'+_('Are you sure you want to delete this file?')+'</p>',
+            access_test=self.can_delete(),
+            access_sorry='<p class="alert">'+_('You cannot a file you did not submit.')+'</p>',
+            group=self.group,
+            file=self.stored_file,
+            dir=self.dir)
+    
+    def can_delete(self):
+        user = get_user()
+        if user:
+            return (user == self.stored_file.owner) or (user.is_admin()) or self.group.is_owner(user)
+        else:
+            return False
+        
+        
+class FileGetterUI(QonBaseUI):
+
+    _q_exports = []
+    cache_time = 8*3600
+    
+    def __init__(self, stored_file):
+        self.stored_file = stored_file
+        
+    def _q_index(self, request):    
+        return request.redirect(url_quote(self.stored_file.filename))
+
+    def _q_lookup(self, request, component):
+        """Handle .../file/1.2.345/get/foo.bar
+        
+        Basically always sends the file back, using the stored_file's own filename.
+        """
+        # 2006-06-24: spam detterent
+        # disallow direct access to file from external site so that our filesystem
+        #  doesn't become a repository for web pages for spam
+        # 2006-07-12: there was a bug when internal users used https because
+        #  if the img src is http, then the https page wasn't passed in HTTP_REFERER,
+        #  so added code to allow internal users direct access always
+        user = get_user()        
+        if (user is None) or (not blocks.util.is_internal_user(user)):
+            referrer = request.get_header('HTTP_REFERER')
+            if (referrer is None) or (qon.local.SITE_NAME not in referrer):
+                return request.redirect(request.get_url(2) + '/') # redirect to file info page
+        
+        from rfc822 import formatdate
+        
+        try:
+            stat = os.stat(self.stored_file.get_full_path())
+        except OSError:
+            # file is missing
+            raise TraversalError, "Sorry, the file can't be found."
+
+            
+        last_modified = formatdate(stat.st_mtime)
+        file_size = stat.st_size
+        if last_modified == request.get_header('If-Modified-Since'):
+            request.response.set_status(304)
+            return ''
+
+        # Set the Expires header        
+        request.response.cache = self.cache_time
+        
+        # XXX potentially huge memory requirement!
+        fp = self.stored_file.open()
+        data = fp.read()
+        fp.close()
+
+        #request.response.set_content_type(self.stored_file.mime_type)
+        
+        # XXX Rather than rely on dubious StoredFile, we use the filename
+        # which at least is under user control, to determine MIME type
+        # and encoding
+        import mimetypes
+        (guess_mime, guess_enc) = mimetypes.guess_type(self.stored_file.filename,
+            strict=0)
+        request.response.set_content_type(guess_mime)
+        if guess_enc:
+            request.response.set_header('Content-Encoding', guess_enc)
+            
+        request.response.set_header('Content-Length', file_size)
+
+        # Commented the next line out because it caused IE6 to fail on every other download
+        # request.response.set_header('Last-Modified', last_modified)
+        
+        request.response.set_header('Content-Disposition',
+                                    'inline; filename="%s"'
+                                    % self.stored_file.filename)
+        return data
+        
+
+class UploadForm(QonForm):
+
+    submit_button = 'submit-upload'
+    cancel_button = 'submit-cancel'
+    submit_buttons = [submit_button, cancel_button]
+
+    def __init__(self, group, dir):
+        QonForm.__init__(self, enctype='multipart/form-data')
+        self.group = group
+        self.dir = dir
+        self._build_form()
+        
+    def _build_form(self):
+        
+        self.add(FileWidget, 'file', title=_('Upload file'),
+            size=40, required=1)
+
+        self.add(StringWidget, 'desc', title=_('Description'),
+            size=60)
+    
+        self.add_submit(self.submit_button, _('Upload'))
+        self.add_submit(self.cancel_button, _('Cancel'))
+        
+    def validate(self):
+        if not QonForm.validate(self):
+            return False
+        
+        upload = self['file']
+        if upload and not self.group.file_db.has_room(upload.tmp_filename):
+            self.set_error('file', _('Sorry, your quota would have been exceeded by adding that file.'))
+            return False
+        # if upload and self.group.file_db.exceeds_maximum_size(upload.tmp_filename):
+        #    self.set_error('file', _('Sorry, you cannot upload files greater than %dMB in size.' % self.group.file_db.get_maximum_size()))
+        #    return False        
+            
+        return True
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            upload = self['file']
+            api.file_upload(self.group,
+                self.dir,
+                owner=get_user(),
+                source_path=upload.tmp_filename,
+                filename=upload.base_filename,
+                desc=self['desc'])
+
+        return get_request().redirect('./')
+
+class UploadReplaceForm(UploadForm):
+
+    def __init__(self, group, dir, path):
+        UploadForm.__init__(self, group, dir)
+        self.path = path
+
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            upload = self['file']
+            api.file_replace(self.group,
+                self.dir,
+                owner=get_user(),
+                path = self.path,
+                source_path=upload.tmp_filename,
+                filename=upload.base_filename,
+                desc=self['desc'])
+
+        return get_request().redirect('./')
+
+
+class FileInfoForm(QonForm):
+
+    submit_button = 'submit-info'
+    cancel_button = 'submit-cancel'
+    download_button = 'submit-download'
+    submit_buttons = [submit_button, cancel_button, download_button]
+
+    def __init__(self, group, file):
+        QonForm.__init__(self)
+        self.group = group
+        self.file = file
+        self._build_form()
+        
+    def _build_form(self):
+        
+        self.add(StringWidget, 'desc', title=_('Description'),
+            value=self.file.description,
+            size=60)
+    
+        self.add_submit(self.cancel_button, _('Cancel'))
+        self.add_submit(self.submit_button, _('Change Description'))
+        self.add_submit(self.download_button, _('Download'))
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.file_set_description(self.file, self['desc'])
+            return get_request().redirect('../')
+        elif self.get_submit() == self.download_button:
+            return get_request().redirect('./get/')
+
+        return get_request().redirect('../')
+
+        
+class DeleteFileForm(QonForm):
+
+    submit_button = 'submit-delete'
+    cancel_button = 'submit-cancel'
+    submit_buttons = [submit_button, cancel_button]
+
+    def __init__(self, group, file, dir):
+        QonForm.__init__(self)
+        self.group = group
+        self.file = file
+        self.dir = dir
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_submit(self.cancel_button, _('Cancel'))
+        self.add_submit(self.submit_button, _('Delete'))
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.file_delete_file(self.group, self.dir, self.file, unlink=True)
+
+        return get_request().redirect('../')
+
+class DeleteDirForm(DeleteFileForm):
+
+    def __init__(self, group, dir, parent_dir):
+        DeleteFileForm.__init__(self, group, file=None, dir=dir)
+        self.parent_dir = parent_dir
+                
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.file_delete_directory(self.group, self.dir, self.parent_dir)
+
+        return get_request().redirect('../')
+
+class RenameDirForm(QonForm):
+
+    submit_button = 'submit-rename'
+    cancel_button = 'submit-cancel'
+    submit_buttons = [submit_button, cancel_button]
+
+    def __init__(self, group, dir):
+        QonForm.__init__(self)
+        self.group = group
+        self.dir = dir
+        self._build_form()
+        
+    def _build_form(self):
+        
+        self.add(StringWidget, 'name', title=_('Folder name'),
+            value=self.dir.filename,
+            size=60)
+    
+        self.add_submit(self.submit_button, _('Save'))
+        self.add_submit(self.cancel_button, _('Cancel'))
+        
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            api.file_rename_directory(self.dir, self['name'])
+
+        return get_request().redirect('./')

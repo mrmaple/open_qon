@@ -1,0 +1,9 @@
+#!/bin/sh
+
+# run the Qon cron job
+
+echo "Running Qon hourly cron..."
+
+/www/sites/qon/bin/cron-hourly.py
+
+exit 3

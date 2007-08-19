@@ -1,0 +1,256 @@
+#!/www/python/bin/python
+
+"""$URL: svn+ssh://svn.mems-exchange.org/repos/trunk/dulcinea/bin/site $
+$Id: site,v 1.4 2004/06/22 22:36:06 pierre Exp $
+
+The site command script.
+This controls the starting and stopping of zeo, scgi, and apache servers.
+"""
+import sys
+import os
+import signal
+import errno
+import time
+from dulcinea import site_util
+
+config = site_util.get_config()
+start_script_dir = config.defaults().get('start-script-directory')
+
+valid_actions = ['start', 'stop', 'restart', 'status', 'help']
+valid_sites = [site
+               for site in os.listdir(config.defaults().get('sites-directory'))
+               if site in site_util.list_sites()]
+assert valid_sites, "You must have at least one site defined"
+#valid_daemons = ['zeo', 'apache', 'scgi', 'lucene']
+valid_daemons = ['zeo', 'scgi', 'lucene']
+
+
+def usage(msg=None):
+    def alts(lst):
+        return ' | '.join(lst)
+    if msg:
+        sys.stderr.write('error: %s\n' % msg)
+    sys.stderr.write('Usage: %s [ <action> | <site> | <daemon ]*\n' %
+                     sys.argv[0])
+    sys.stderr.write('where:\n')
+    sys.stderr.write('       <action> = %s\n' % alts(valid_actions))
+    sys.stderr.write('           default is status\n')
+    sys.stderr.write('       <site> = %s\n' % alts(valid_sites))
+    sys.stderr.write('           to specify some subset of all sites\n')
+    sys.stderr.write('           default is all sites\n')
+    sys.stderr.write('       <daemon> = %s\n' % alts(valid_daemons))
+    sys.stderr.write('           to specify some subset of all daemons\n')
+    sys.stderr.write('           default is all daemons\n')
+    sys.exit(1)
+
+def is_running(pid):
+    """Return true if program with 'pid' exists."""
+    # Currently Linux specific.
+    return os.path.exists('/proc/%s' % pid)
+
+def write(*args):
+    sys.stdout.write(' '.join(args))
+    sys.stdout.flush()
+
+def sanitize_environment(env):
+    if env is None:
+        env = {}
+    for name in ['PATH', 'LOGNAME']:
+        if name not in env:
+            env[name] = os.environ.get(name, '')    # pmo LOGNAME not defined at startup
+    return env
+
+def start_daemon(daemon, site='', exe=None, args=None, env=None):
+    pid_file = site_util.get_pid_file_name(daemon, site)
+    if os.path.isfile(pid_file):
+        pid = open(pid_file).read().strip()
+        if is_running(pid):
+            write('\n%s %s appears to be running, not starting.\n' % (
+                site, daemon))
+            return
+        else:
+            write('\nPID file for %s %s appears obsolete, removing it.\n' % (
+                site, daemon))
+            os.unlink(pid_file)
+    pid = os.fork()
+    if pid == 0:
+        for i in range(4, 256):
+            try:
+                os.close(i)
+            except:
+                pass
+        os.chdir(os.path.dirname(pid_file))
+        env = sanitize_environment(env)
+        try:
+            os.execve(exe, [exe] + map(str, args), env)
+        except OSError, err:
+            sys.stderr.write("couldn't exec %s: %s\n" % (exe, err.strerror))
+        except:
+            sys.stderr.write("couldn't exec %s\n" % exe)
+            raise
+        os._exit(2)
+    (pid, status) = os.wait()
+    if status:
+        print >>sys.stderr, "%s returned error status %s" % (exe, status)
+
+def stop_daemon (daemon, site=''):
+    pid_file = site_util.get_pid_file_name(daemon, site)
+    if os.path.isfile(pid_file):
+        pid = open(pid_file).read().strip()
+        try:
+            os.kill(int(pid), signal.SIGTERM)
+            os.unlink(pid_file)
+        except OSError, e:
+            if errno.ESRCH == e.errno:
+                os.unlink(pid_file)
+                write('%s %s (%s) not found.' % (daemon, site, pid))
+            else:
+                write('\nkill failed: %s %s (%s)\n' % (daemon, site, pid))
+                write('%s\n' % os.strerror(e.errno))
+        else:
+            for i in range(10):
+                if not is_running(pid):
+                    break
+                time.sleep(1)
+            else:
+                write('\nkill failed: %s %s (%s)\n' % (daemon, site, pid))
+    else:
+        write('\n%s %s does not appear to be running.\n' % (site, daemon))
+
+def start (daemon, site=None):
+    start_daemon(daemon, site,
+                 os.path.join(start_script_dir, 'start-%s.py' % daemon),
+                 (site,))
+
+def start_zeo (sites):
+    for site in sites:
+        if not config.has_option(site, 'zeo-address'):
+            continue
+        if site_util.is_local(config.get(site, 'zeo-address')):
+            write(' ' + site)
+            start('zeo', site)
+
+def stop_zeo (sites):
+    for site in sites:
+        if not config.has_option(site, 'zeo-address'):
+            continue
+        if site_util.is_local(config.get(site, 'zeo-address')):
+            write(' ' + site)
+            # XXX pmo can't use stop_daemon because there's no pid file for zeo
+            #stop_daemon('zeo', site)
+            zeod = config.defaults().get('zeod')
+            os.execv(zeod, (zeod, 'stop'))
+
+def start_scgi (sites):
+    for site in sites:
+        if not config.has_option(site, 'scgi-address'):
+            continue
+        if site_util.is_local(config.get(site, 'scgi-address')):
+            write(' ' + site)
+            start('scgi', site)
+
+def stop_scgi (sites):
+    for site in sites:
+        if not config.has_option(site, 'scgi-address'):
+            continue
+        if site_util.is_local(config.get(site, 'scgi-address')):
+            write(' ' + site)
+            stop_daemon('scgi', site)
+
+def start_apache(sites):
+    start('apache')
+
+def stop_apache(sites):
+    stop_daemon('apache')
+
+def start_lucene (sites):
+    for site in sites:
+        if not config.has_option(site, 'lucene-address'):
+            continue
+        if site_util.is_local(config.get(site, 'lucene-address')):
+            write(' ' + site)
+            start('lucene', site)
+
+def stop_lucene (sites):
+    for site in sites:
+        if not config.has_option(site, 'lucene-address'):
+            continue
+        if site_util.is_local(config.get(site, 'lucene-address')):
+            write(' ' + site)
+            stop_daemon('lucene', site)
+
+
+
+def show_status():
+    cmd = 'ps f -Ao pid,user,args | grep "\\(start-\||scgi\\|zeo\\|apache\\|httpd\\)" | grep -v grep'
+    os.system(cmd)
+
+def main():
+    action = 'status'
+    for act in valid_actions:
+        if act in sys.argv:
+            action = act
+            break
+
+    sites = ([ site for site in valid_sites if site in sys.argv ] or
+             valid_sites)
+    if site_util.any_live_sites():
+        # Exclude all sites that aren't live
+        sites = [site for site in sites if site_util.is_live(site)]
+
+    daemons = ([ daemon for daemon in valid_daemons if daemon in sys.argv ] or
+               valid_daemons)
+
+    def start_daemons():
+        if 'zeo' in daemons:
+            write('Starting ZEO servers:')
+            start_zeo(sites)
+            write('\n')
+        if 'scgi' in daemons:
+            write('Starting SCGI servers:')
+            start_scgi(sites)
+            write('\n')
+        if 'apache' in daemons:
+            write('Starting Apache:')
+            start_apache(sites)
+            write('done\n')
+        if 'lucene' in daemons:
+            write('Starting Lucene:')
+            start_lucene(sites)
+            write('done\n')
+
+    def stop_daemons():
+        if 'lucene' in daemons:
+            write('Stopping Lucene:')
+            stop_lucene(sites)
+            write('done\n')
+        if 'apache' in daemons:
+            write('Stopping Apache:')
+            stop_apache(sites)
+            write('done\n')
+        if 'scgi' in daemons:
+            write('Stopping SCGI servers:')
+            stop_scgi(sites)
+            write('\n')
+        if 'zeo' in daemons:
+            write('Stopping ZEO servers:')
+            stop_zeo(sites)
+            write('\n')
+
+    if action == 'start':
+        start_daemons()
+
+    elif action == 'stop':
+        stop_daemons()
+
+    elif action == 'restart':
+        stop_daemons()
+        start_daemons()
+
+    elif action == 'status':
+        show_status()
+
+    elif action == 'help':
+        usage()
+
+main()

@@ -1,0 +1,242 @@
+======
+README
+======
+
+This is a work in progress.
+
+INSTALLATION
+------------
+
+Required packages
+~~~~~~~~~~~~~~~~~
+
+Qon requires the following software to be installed:
+
+    - apache-1.3.29
+    - python 2.3.3 (not tested on earlier versions)
+    
+It is highly desireable to have GNU readline installed BEFORE python
+is built:
+
+    - readline-4.3    (http://www.gnu.org/directory/readline.html)
+    
+      (This is included in the FreeBSD base distribution, but may not
+      be on other systems. I installed it from DarwinPorts on Mac OS X)
+    
+And the following python packages:
+
+    - quixote-1.0b1   (http://www.mems-exchange.org/software/quixote/)
+    - dulcinea-0.2.1  (http://www.mems-exchange.org/software/dulcinea/)
+    - scgi-1.2a2      (http://www.mems-exchange.org/software/scgi/)
+    - twisted-1.2.0   (http://www.twistedmatrix.com/products/download)
+    - ZODB3-3.3a3     (http://www.zope.org/Products/ZODB3.3)
+    - docutils        (http://docutils.sourceforge.net/)
+    - PyXML           (http://pyxml.sourceforge.net/)
+    
+      Be sure to run the ZODB tests before installation. See the README.
+      On delta I received the following failed tests::
+      
+        Failure in test testRunIgnoresParentSignals (zdaemon.tests.testzdrun.ZDaemonTests)
+        Failure in test testUmask (zdaemon.tests.testzdrun.ZDaemonTests)
+    
+Test suites require:
+
+    - sancho-0.2      (http://www.mems-exchange.org/software/sancho/)
+    
+These packages may be needed by Qon site management tools:
+
+    - py-mx-2.0.5     (http://www.egenix.com/files/python/mxDateTime.html)
+    - py-optik-1.4.1  (http://optik.sourceforge.net/)
+
+
+Installing Quixote
+~~~~~~~~~~~~~~~~~~
+
+We use the form2 package, which is not installed by default::
+
+  # cp -r form2 /usr/local/lib/python2.3/site-packages/quixote/
+
+    (or wherever your site-packages lives)
+
+If you're using quixote 1.0b1 and Python 2.4, there is one small 
+difference in python 2.4's compiler.ast.Function constructor:
+
+file: ptl_compile.py  line 129 should change from:
+            n = ast.Function(name, names, defaults, flags, doc, code)
+to:
+            n = ast.Function(None, name, names, defaults, flags, doc, code)
+Python2.4 has a new first argument to the Function.__init__ for decorators.
+
+
+Installing scgi
+~~~~~~~~~~~~~~~
+
+scgi is both python code and an apache module. Aside from the usual
+`python setup.py install`, you also have to build and install the apache
+shared module. But the makefile is broken. So, from the README::
+
+  # cd apache1
+  # apxs -i -c mod_scgi.c
+
+Installing Qon
+~~~~~~~~~~~~~~
+::
+
+  # cvs co qon
+  # cd qon
+  # python setup.py install
+
+This should install qon into your python site-packages, and create the
+/www directory hierarchy, almost::
+
+  # mkdir /www/var
+  # chown www:www /www/var
+  # mkdir /www/var/upload_tmp
+  # chown www:www /www/var/upload_tmp
+  # mkdir -p /www/log/httpd
+  # mkdir -p /www/log/qon
+  # chown -R www:www /www/log
+
+Lucene needs permission to write to its log directory
+  # chmod 770 /www/log/qon/lucene
+
+  
+The site management tools expect to find a symlink to python here::
+
+  # mkdir -p /www/python/bin
+  # ln -s /usr/local/bin/python /www/python/bin/
+
+
+
+
+MAC OS X NOTES
+--------------
+
+I use the DarwinPorts system on OS X -- it is much less mature than Fink, but
+it enforces the standard that all user-installed software lives in a different
+hierarchy than system-installed software. DP uses /opt/local as its root.
+
+* Install python from DarwinPorts (version 2.3.3). Mac OS X 10.3 ships with
+  python 2.3.
+* make sure /opt/local/bin is in your path -- test it by typing `python' and
+  checking the version number.
+* Install the other python packages
+* Install scgi: you have to tweak the Makefile to refer to /opt/local/sbin/apxs
+  with a fully-qualified path, otherwise it may pick up /usr/sbin/apxs.
+
+* Must create many symlinks to add /opt/local dirs into /usr/local
+
+
+SITE MANAGEMENT
+---------------
+
+See the 'etc' directory in the distribution. It contains a single directory,
+'www', which is intended to represent the /www hierarchy in your server's
+filesystem. (Yes, it's annoying to create a new root-level hierarchy, but
+that's the way Dulcinea expects it.)
+
+See dulcinea/doc/site-management.txt for an explanation.
+
+ZODB FileStorage is a log file. New versions of objects are appended to end
+of file. Therefore, the file will keep expanding until packed. Packing is
+typically an expensive operation which throws out unreferenced old versions
+of unreachable objects. As of now there is no automated pack. Log into the
+database and call db.pack().
+
+
+RUNNING FOR THE FIRST TIME
+--------------------------
+
+1. Create the database: /www/sites/qon/bin/create_db. This will (should) fail if the
+   database already exists.
+   
+   a. Change ownership of db files to www::
+   
+      # chown www:www /www/var/qon.fs*
+
+Note: if this fails, try starting lucene manually with /www/bin/start-lucene.sh and
+then try again.
+      
+2. Set up default ZEO password::
+   
+   # zeopasswd.py zeoclient1
+   # (enter zeopass1 as the password)
+   
+
+3. Examine /www/conf/sites.conf to make sure it is sane.
+
+4. Fix permissions::
+
+    # chown root:wheel /www/conf/sites.conf
+    # chmod 400 /www/conf/sites.conf (it contains passwords)
+    
+    ZEO authentication database needs to be readable by www::
+    
+    # chown www:www /www/etc/zeo-auth.db
+    # chmod 400 /www/etc/zeo-auth.db
+    
+
+4. `/www/bin/site start' will start up the scgi server, ZEO connection, and apache
+
+5. `/www/bin/site stop' will shut the servers down.
+
+6. `/www/bin/site restart' doesn't work: use `kill -HUP `cat /www/var/qon-scgi.pid`' to
+   restart the application server when code is updated.
+
+7. Give read/write access to www in python2.3/site-packages/qon/ so python can write out
+   its pre-compiled files upon first execution.
+
+INTERNATIONALIZATION
+--------------------
+
+1. Create the message.pot file::
+
+    find . -name \*.py -or -name \*.ptl | xargs bin/pygettext.py
+
+2. Copy file to e.g. ``en.po`` for English, or ``fr.po`` for French.
+3. Translate the file, e.g. ``fr.po`` should translate all strings into French::
+
+   a. Be sure to set the correct CHARSET! E.g. ISO-8859-1
+   
+4. Place each translated file into appropriate local directory,
+   renaming to ``qon.po``::
+   
+   a. mv fr.po etc/www/locale/fr/qon.po
+   b. mv en.po etc/www/locale/en/qon.po
+   c. etc...
+
+5. For each translated directory, e.g, ``fr``, create the binary qon.mo files::
+
+   a. bin/msgfmt.py etc/www/locale/en/qon.po
+   b. mv etc/www/locale/en/qon.po etc/www/locale/en/LC_MESSAGES/
+   
+6. Please, please write a tool that automates all of this!
+
+
+TROUBLESHOOTING
+---------
+
+Symptoms: /home/ takes forever, and never loads, but / works.  /www/log/qon/error.log ends
+with: ZEO.Exceptions.ClientDisconnected.
+
+Remedy: (? Check permissions ?)
+
+
+RESOURCES
+---------
+
+- ZODB_
+
+  - `ZODB/ZEO Programmer's Guide`_
+
+- Python_
+
+- Quixote_
+
+  - See also: http://www.amk.ca/python/writing/mx-architecture/
+
+.. _ZODB: http://zope.org/Wikis/ZODB/FrontPage
+.. _ZODB/ZEO Programmer's Guide:
+   http://zope.org/Wikis/ZODB/FrontPage/guide/index.html
+.. _Python: http://www.python.org
+.. _Quixote: http://www.mems-exchange.org/software/quixote/

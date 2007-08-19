@@ -1,0 +1,11 @@
+--- ClientStorage.py.orig	Wed Oct 13 17:06:56 2004
++++ ClientStorage.py	Wed Oct 13 17:07:52 2004
+@@ -309,7 +309,7 @@
+             cache_path = os.path.join(dir, "%s-%s.zec" % (client, storage))
+         else:
+             cache_path = None
+-        self._cache = self.ClientCacheClass(cache_path)
++        self._cache = self.ClientCacheClass(cache_path, size=cache_size)
+         # XXX When should it be opened?
+         self._cache.open()
+ 

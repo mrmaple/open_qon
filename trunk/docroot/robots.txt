@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /search/
+Disallow: /text
+Disallow: /textfull
+Disallow: /prt
+
+User-agent: Fasterfox
+Disallow: /

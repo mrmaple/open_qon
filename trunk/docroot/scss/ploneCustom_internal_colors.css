@@ -1,0 +1,168 @@
+/************************/
+/* CHANGE LINKS TO BLUE */
+/************************/
+a {
+    color: #003366;
+}
+p a:visited {
+    color: #003366;
+    background-color: transparent;
+}
+
+/********************************/
+/* CHANGE GREEN TOP BAR TO BLUE */
+/********************************/
+/*
+#portal-globalnav li a {
+    border-color: #07aFd2;
+    color: #666666;
+}
+#portal-globalnav li.selected a {
+    background-color: #A7BFE2;
+    border: 1px solid #07aFd2;
+    border-bottom: #07aFd2 1px solid;
+    color: #666666;
+}
+#portal-globalnav li a:hover {
+    background-color: #A7BFE2;
+    border-color: #07aFd2;
+    border-bottom-color: #07aFd2;
+    color: #666666;
+}
+#portal-personaltools {
+    background-color: #A7BFE2;
+    border-top-color: #07aFd2;
+    border-bottom-color: #07aFd2;
+}
+*/
+
+/************************************/
+/* CHANGE BROWN CONTENT BAR TO GRAY */
+/*  background: E9E9E9              */
+/*  border    : B3B3B3              */
+/************************************/
+
+.contentViews {
+    border-bottom-color: #B3B3B3;
+}
+
+.contentViews li a {
+    border: 1px solid #B3B3B3;
+    color: #666666;
+}
+
+.contentViews .selected a {
+    background-color: #E9E9E9;
+    border-bottom: #E9E9E9 1px solid;
+    color: #666666;
+}
+.contentViews li a:hover {
+    background-color: #E9E9E9;
+    color: #666666;
+}
+
+.contentActions {
+    background-color: #E9E9E9;
+    border-left: 1px solid #B3B3B3;
+    border-right: 1px solid #B3B3B3;
+    color: #666666;
+}
+
+.contentActions .actionMenu {
+    background: #E9E9E9;
+    border: 1px #B3B3B3;
+    border-style: none solid solid solid;
+    overflow: visible;	/* Alex added as a partial fix for trunctated drop-down menus in Firefox */
+    
+}
+
+div.groupbar {
+    background-color: transparent;
+    border-collapse: collapse;
+    padding: 0px 0px 0px 0px;
+    white-space: nowrap;
+    list-style: none;
+    margin: 0;
+    height: auto;
+    line-height: normal;
+
+    color: #666666;
+    background-color: #E9E9E9;
+    border: 1px solid #B3B3B3;
+
+    border-bottom: #E9E9E9 1px solid;
+}
+div.groupbar a {
+    background-color: #E9E9E9;
+    border-bottom: #E9E9E9 1px solid;
+    color: #666666;
+}
+div.groupbar a:hover {
+    background-color: #E9E9E9;
+    color: #666666;
+}
+
+div.groupbar table td.grouptitle {
+    color: #666666;
+    background-color: #E9E9E9;
+    font-size: 1.2em;    
+}
+div.groupbar table td.groupsections {
+    color: #666666;
+    background-color: #E9E9E9;
+    font-size: 1.1em;
+    text-align: right;
+}
+
+div.groupsummary {
+    border-collapse: collapse;
+    padding: 0.5em 0.5em 0.5em 0.5em;
+    /*white-space: nowrap;*/
+    /*list-style: disc;*/
+    /*margin: 0;*/
+    height: auto;
+    line-height: normal;
+
+    border: 1px solid #B3B3B3;
+
+    font-size: 0.9em;
+    background-color: white;
+}
+
+.actionMenu .actionSeperator a {
+    border-top: 1px solid #B3B3B3;
+}
+
+.documentEditable .documentContent {
+    border: 1px solid #B3B3B3;
+}
+
+
+/************************************/
+/* CHANGE GREEN LISTING BAR TO GRAY */
+/*  background: E9E9E9              */
+/*  border    : B3B3B3              */
+/************************************/
+.listing,
+.stx table {
+    border-left: 1px solid #B3B3B3;
+    border-bottom: 1px solid #B3B3B3;
+}
+.listing th {
+    background: #E9E9E9;
+    border-top: 1px solid #B3B3B3;
+    border-bottom: 1px solid #B3B3B3;
+    border-right: 1px solid #B3B3B3;
+}
+.listing td {
+    border-right: 1px solid #B3B3B3;
+}
+
+
+/************************************/
+/* CHANGE GREEN HEADER LINE TO GRAY */
+/*  border    : B3B3B3              */
+/************************************/
+h1, h2, h3, h4, h5, h6 {
+    border-bottom: 1px solid #B3B3B3;
+}

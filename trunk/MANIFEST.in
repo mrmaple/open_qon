@@ -1,0 +1,5 @@
+recursive-include bin create_db *.py
+recursive-include conf *
+recursive-include doc *
+recursive-include docroot *
+recursive-include etc *

@@ -1,0 +1,502 @@
+"""
+$Id: action.ptl,v 1.36 2007/05/29 15:42:04 jimc Exp $
+"""
+from quixote import get_request
+from quixote.form2 import TextWidget
+from quixote.errors import AccessError, TraversalError
+from quixote.html import href
+from dulcinea.errors import NotLoggedInError
+from qon.base import get_user
+import qon.api
+import qon.karma
+import qon.ui.form
+import qon.user
+import qon.group
+from quixote.form2 import Form, StringWidget, PasswordWidget, TextWidget, CheckboxWidget
+import qon.ui.blocks
+from qon.user import HasEmail
+
+from qon.ui import messages
+_ = messages.t
+def _h(x): return htmltext(_(x))
+
+def karma_page [html] (obj, title=''):
+    if not obj:
+        raise TraversalError
+        
+    user = get_user()
+    if not user:
+        raise NotLoggedInError
+    
+    if not isinstance(obj, qon.user.User):
+        raise TraversalError
+    
+    if not title:
+        title = 'Feedback'
+    
+    page_title=messages.site_title + ': Feedback for %s' % qon.ui.blocks.util.display_name_plain(obj)
+    
+    heading_text = '''<h2>%(title)s</h2>
+    <p class="subtitle">
+    %(karma)s<br />
+    %(karma_pos)s<br />
+    %(karma_neg)s
+    </p>
+    ''' % dict(title=title,
+        karma=qon.ui.blocks.user.karma(obj, path='../', show_control=False),
+        karma_pos=qon.ui.blocks.user.karma_people(obj, count=0),
+        karma_neg=qon.ui.blocks.user.karma_negative_people(obj, count=0),
+        )
+    footer_text = '''<p>To learn more about feedback, see the
+    <a href="/group/help/ws/feedback">Feedback Help</a> page.</p>'''
+    
+    access = 1
+
+    karma_points_from = obj.karma_points_from(user)
+    
+    heading_text+='''<p>Giving feedback: is this user a particularly good member
+    of the community? Or a particularly bad member? Give positive or negative feedback
+    here.</p>
+    <p>You have %s feedback points to give. You have given this user %s points already.
+    </p>
+    <p>
+    Giving positive feedback: Giving a user positive feedback will
+    cause your name to appear on their profile as a giver of
+    positive feedback. Giving more than four points of positive
+    feedback will cause the actual number of points you've
+    given to be displayed.
+    </p>
+    <p>
+    Giving negative feedback: Your name will not be
+    displayed unless you give the user enough negative
+    feedback to negatively affect their score by more than
+    four points (net -5 or worse).
+    </p>
+    ''' % (user.get_karma_bank_balance(), karma_points_from)
+    
+    if karma_points_from <= (qon.karma.show_neg_threshold + 1):
+        heading_text+='''
+        <p class="alert">Notice: if you give this user a net of %d or lower, your name
+        will appear on this user's profile as a giver of negative feedback.
+        </p>
+        ''' % qon.karma.show_neg_threshold
+    
+    good_button = 'Give positive feedback'
+    bad_button = 'Give negative feedback'
+    access = obj.can_get_karma_from(user)
+    
+    if obj.is_disabled():
+        qon.ui.blocks.util.header(get_request(), page_title)
+        heading_text
+        '''
+        <p class="alert">Sorry, this user is inactive and cannot receive feedback.</p>
+        '''
+        qon.ui.blocks.util.footer()
+    else:
+        qon.ui.form.manage_form(get_request(), UserKarmaForm,
+            page_title=page_title,
+            suppress_top_heading=True,
+            heading_text=heading_text,
+            footer_text=footer_text,
+            commit_text='<p><span class="info">Your feedback has been recorded.</span> '
+            'Thank you for doing your part as a member of this community.</p>',
+            access_test=qon.api.karma_has_bad_to_give(user) and access,
+            access_sorry='<p class="alert">Sorry, you can\'t give feedback to this item.</p>'
+            '<p>This can happen because you have no points left in your point bank, or because you '
+            'are the owner of this item.</p>',
+            user=obj,
+            good_button=good_button,
+            bad_button=bad_button)
+
+def action_vote_sponsor [html] (obj):
+    user = get_user()
+    if user is None:
+        return ''
+    #if obj.get_state() == 'pending' and user not in obj.get_sponsors():
+    if obj.get_state() == 'pending':
+        if user not in obj.get_sponsors():
+            '''
+            <hr noshade="noshade" />
+            <p>This group is seeking additional sponsors in order to become active.
+            <a href="sponsor">Click here</a> to sponsor this group.</p>
+            <hr noshade="noshade" />
+            '''
+        else:
+            '''
+            <hr noshade="noshade" />
+            <p>
+            <span class="info">You are a sponsor of this
+            group, but the group is still pending.</span> New groups need %s sponsors (including you)
+            before they become active. Contact your associates and ask
+            them to come to this page to sponsor this group. </p>
+            <hr noshade="noshade" />''' % obj._min_sponsors
+    
+def action_join [html] (obj):
+    user = get_user()
+    if user is None:
+        return ''
+    if isinstance(obj, qon.group.HasMembership):
+        if not obj.is_member(user) and obj.is_accepted() and \
+            not obj.is_owner(user) and \
+            obj.can_join(user):
+            
+            '<hr noshade="noshade" />'
+
+            if obj.is_invited(user):
+                '''<p><span class="info">You have been invited to join this group.</span><br />
+                <span class="explanation">Click the Join button to join the group. You may also decline the invitation;
+                by doing so you will not be able to join until someone invites you again.</span></p>'''
+                
+            qon.ui.form.manage_form_in_page(JoinGroupForm,
+                commit_text='<p class="info">You are now a member of this group.</p>',
+                group=obj,
+                user=user)
+
+            '<hr noshade="noshade" />'
+            
+
+def email_this_page [html] (request, obj):
+    title = "Email this page"
+
+    obj_title = _h(qon.ui.blocks.util.formatted_display_name_plain(obj))
+
+    h = '''
+    <h1>Email this page - %s</h1>
+    <p class="formHelp">Share this page with others.  Recipients will receive an
+    email sent from your email address, with a link to this page.
+    </p>
+    ''' % obj_title
+    f = '''
+    <p class="formHelp">Note: The email address(es) that you supply to use
+    this feature will be used only to send the requested link.
+    '''       
+    user = get_user()
+    if qon.ui.blocks.util.is_internal_item(obj):
+        subject="A link from ned.com"
+        # subject = "an ned.com link from " + user.get_primary_email()                
+    else:
+        subject="A link from ned.com - " + obj_title
+        # subject = "an ned.com link from " + user.get_primary_email()
+
+    return_link = "Return to " + href(qon.ui.blocks.util.path_to_obj(obj), obj_title)    
+
+    qon.ui.form.manage_form(request, EmailThisPageForm,
+        page_title=title,
+        heading_text=h,
+        footer_text=f,                    
+        suppress_top_heading=True,
+        access_test=user is not None,
+        access_sorry='<p class="alert">Sorry, you need to be signed-in to email this page.</p>',                    
+        user=get_user(),
+        subject=subject,
+        obj = obj,
+        commit_text='<p class="info">' + _('Thank you! Your message has been sent to the following people:') + '</p>'
+            '<ul>%s</ul>' + return_link,
+        commit_repl='RESULT'
+        )
+   
+ # ---------------------------------------------------------------------
+
+class UserKarmaForm(qon.ui.form.QonForm):
+
+    submit_good = 'submit-good-vote'
+    submit_bad = 'submit-bad-vote'
+    submit_buttons = [submit_good, submit_bad]
+    
+    def __init__(self, user, good_button='Good member', bad_button='Bad member'):
+        qon.ui.form.QonForm.__init__(self)
+        
+        cur_user = get_user()
+        if not cur_user:
+            raise AccessError
+        
+        self.user = user
+
+        self.karma_points_from = user.karma_points_from(cur_user)
+        self.over_neg = (self.karma_points_from <= qon.karma.show_neg_threshold + 1)
+        
+        self._build_form(good_button, bad_button)
+        
+    def _build_form(self, good_button, bad_button):
+
+        # add selector for giving multiple points
+        self.add_single_select('num-points', title="Number of points to give",
+            options=['-1', '---', '+1', '+2', '+3'],
+            value='+1')
+        
+        # show additional checkbox to prevent accident over-neg
+        if self.over_neg:
+            self.add_checkbox('confirm-neg',
+                title='I understand that my name will be listed publicly as having given this user negative feedback.',
+                hint='Check this box if you want to leave more negative feedback for this user.',
+                )
+        
+        self.add_text('message', title="Optional message to user", required=False, rows=5, cols=60,
+            hint="Send message to user accompanying your feedback.")
+        
+        self.add_checkbox('anon', title="Make this message anonymous", required=False,
+            hint='''Check this box if you want your message to be delivered anonymously by the "Administrative User." Otherwise, this message will come from you, personally.''',
+            value=False)
+        
+        self.add_submit(self.submit_good, good_button)
+        self.add_submit(self.submit_bad, bad_button)
+
+    def validate(self):
+        if not qon.ui.form.QonForm.validate(self):
+            return False
+
+        try:
+            num_points = int(self['num-points'])
+        except (KeyError, ValueError):
+            self.set_error('num-points', "You must provide a number.")
+            return False
+
+        if num_points < -1 or num_points > 3:
+            self.set_error('num-points', "You must provide a number between -1 and 3.")
+            return False
+
+        if self.get_submit() == self.submit_good:
+            if num_points < 1:
+                self.set_error('num-points', "To leave positive feedback, you must select a positive number.")
+                return False
+        elif self.get_submit() == self.submit_bad:
+            if num_points >= 0:
+                self.set_error('num-points', "To leave negative feedback, you must select a negative number.")
+                return False
+
+            if self.over_neg and not self['confirm-neg']:
+                self.set_error('confirm-neg', "You must check this box if you want to leave more negative feedback.")
+                return False
+
+
+        return True
+    
+    def commit(self):
+        user = get_user()
+        if not self.user or not user:
+            raise AccessError
+
+        event = ''
+        num_points = int(self['num-points'])
+        if self.get_submit() == self.submit_good:
+            qon.api.karma_give_good(user, self.user, (self['message'] or '').strip(),
+                self['anon'], karma=num_points)
+            event = "?e=ufp"
+
+        elif self.get_submit() == self.submit_bad:
+            # make sure checkbox was checked, otherwise ignore
+            if not self.over_neg or self['confirm-neg']:
+                qon.api.karma_give_bad(user, self.user, (self['message'] or '').strip(),
+                    self['anon'], karma=num_points)
+                event = "?e=ufn"
+
+        if self['message'] and len(self['message'])>0:
+            if self['anon']:
+                event += "&e=fmsga"
+            else:
+                event += "&e=fmsg"
+        get_request().redirect('./' + event)
+
+class UserTagKarmaForm(qon.ui.form.QonForm):
+
+    submit_good = 'submit-good-vote'
+    submit_bad = 'submit-bad-vote'
+    submit_buttons = [submit_good, submit_bad]
+    
+    def __init__(self, user, good_button='Good tagger', bad_button='Bad tagger'):
+        qon.ui.form.QonForm.__init__(self)
+        
+        cur_user = get_user()
+        if not cur_user:
+            raise AccessError
+        
+        self.user = user
+
+        self.karma_points_from = user.karma_points_from(cur_user)
+        self.over_neg = (self.karma_points_from <= qon.karma.show_neg_threshold + 1)
+        
+        self._build_form(good_button, bad_button)
+        
+    def _build_form(self, good_button, bad_button):
+
+        # add selector for giving multiple points
+        self.add_single_select('num-points', title="Number of points to give",
+            options=['-1', '---', '+1', '+2', '+3'],
+            value='+1')
+        
+        # show additional checkbox to prevent accident over-neg
+        if self.over_neg:
+            self.add_checkbox('confirm-neg',
+                title='I understand that my name will be listed publicly as having given this user negative feedback.',
+                hint='Check this box if you want to leave more negative feedback for this user.',
+                )
+        
+        self.add_text('message', title="Optional message to user", required=False, rows=5, cols=60,
+            hint="Send message to user accompanying your feedback.")
+        
+        self.add_checkbox('anon', title="Make this message anonymous", required=False,
+            hint='''Check this box if you want your message to be delivered anonymously by the "Administrative User." Otherwise, this message will come from you, personally.''',
+            value=False)
+        
+        self.add_submit(self.submit_good, good_button)
+        self.add_submit(self.submit_bad, bad_button)
+
+    def validate(self):
+        if not qon.ui.form.QonForm.validate(self):
+            return False
+
+        try:
+            num_points = int(self['num-points'])
+        except (KeyError, ValueError):
+            self.set_error('num-points', "You must provide a number.")
+            return False
+
+        if num_points < -1 or num_points > 3:
+            self.set_error('num-points', "You must provide a number between -1 and 3.")
+            return False
+
+        if self.get_submit() == self.submit_good:
+            if num_points < 1:
+                self.set_error('num-points', "To leave positive feedback, you must select a positive number.")
+                return False
+        elif self.get_submit() == self.submit_bad:
+            if num_points >= 0:
+                self.set_error('num-points', "To leave negative feedback, you must select a negative number.")
+                return False
+
+            if self.over_neg and not self['confirm-neg']:
+                self.set_error('confirm-neg', "You must check this box if you want to leave more negative feedback.")
+                return False
+
+        return True
+    
+    def commit(self):
+        user = get_user()
+        if not self.user or not user:
+            raise AccessError
+
+        event = ''
+        num_points = int(self['num-points'])
+        if self.get_submit() == self.submit_good:
+            qon.api.tag_karma_give_good(user, self.user, (self['message'] or '').strip(),
+                self['anon'], karma=num_points)
+            event = "?e=ufp"
+
+        elif self.get_submit() == self.submit_bad:
+            # make sure checkbox was checked, otherwise ignore
+            if not self.over_neg or self['confirm-neg']:
+                qon.api.tag_karma_give_bad(user, self.user, (self['message'] or '').strip(),
+                    self['anon'], karma=num_points)
+                event = "?e=ufn"
+
+        if self['message'] and len(self['message'])>0:
+            if self['anon']:
+                event += "&e=fmsga"
+            else:
+                event += "&e=fmsg"
+        get_request().redirect('./' + event)
+
+class JoinGroupForm(qon.ui.form.QonForm):
+    """Form controller to join a group"""
+    
+    submit_button = 'submit-join'
+    decline_button = 'submit-decline'
+    submit_buttons = [submit_button, decline_button]
+    
+    def __init__(self, group, user):
+        qon.ui.form.QonForm.__init__(self)
+        self.group = group
+        self.user = user
+        self._build_form()
+        
+    def _build_form(self):
+        self.add_submit(self.submit_button, 'Join this group')
+        
+        # show decline button if user is invited into group
+        if self.group.is_invited(self.user):
+            self.add_submit(self.decline_button, 'Decline the invitation')
+    
+    def commit(self):
+        if self.get_submit() == self.submit_button:
+            qon.api.group_join(self.group, self.user)
+        elif self.get_submit() == self.decline_button:
+            qon.api.group_decline_invitation(self.group, self.user)
+        get_request().redirect('./')
+
+# ---------------------------------------------------------------------
+
+class EmailThisPageForm(qon.ui.form.QonForm):
+    
+    submit_button = 'submit-email'
+    submit_buttons = [submit_button]
+    
+    def __init__(self, user, obj, subject):
+        qon.ui.form.QonForm.__init__(self)
+        self.user = user
+        self.subject = subject
+        self.obj = obj
+        self._build_form()
+        
+    def _build_form(self):
+        self.add(StringWidget, 'from', title='From', readonly=1, size=50)
+        self.get_widget('from').set_value(self.user.get_primary_email())
+        
+        self.add_string('subject', title="Subject", size=70, required=True)        
+        self.get_widget('subject').set_value(self.subject)
+        
+        self.add(TextWidget, 'emails', title='To', rows=2, cols=50, required=True, hint="To send this message to more than one recipient, separate email addresses with spaces or carriage returns")
+        
+        self.add(TextWidget, 'pm', title='Personal message', required=False,
+            rows=4, cols=60, hint="(Optional) This message will be sent along with your email.")
+        self.add(CheckboxWidget, 'copy-self', False, title="Send me a copy")        
+        self.add_submit(self.submit_button, 'Send')
+
+    def validate(self):
+        if not qon.ui.form.QonForm.validate(self):
+            return False
+
+        # even though the From field is read-only, let's check anyways
+        if not self['from'] == self.user.get_primary_email():
+            self.set_error('from', "You are not allowed to change the From field.")
+            return False            
+        
+        if self['emails'] is None:
+            self.set_error('emails', "Separate email addresses by spaces or one on each line.")
+            return False
+
+        if self['subject'] is None:
+            self.set_error('subject', "A subject for your email is required.")
+            return False        
+        
+        emails = self['emails'].split()
+        for email in emails:
+            if not HasEmail.is_valid_email(email):
+                self.set_error('emails', "'%s' is not a valid email address." % email)
+                return False
+        
+        return True
+        
+    def commit(self):
+        from smtplib import SMTPRecipientsRefused
+
+        user = get_user()
+        if user:
+            if self['emails'] is not None:
+                output = []
+                emails = self['emails'].split()
+                if self['copy-self']:
+                    emails.append(self['from'])
+                for email in emails:
+                    try:
+                        qon.api.misc_email_page(self['from'], email, self.user, self['subject'], self['pm'], self.obj)
+                    except SMTPRecipientsRefused:
+                        output.append('''<li><span class="alert">The email address '%s' was rejected by the server.</span>''' % email)
+                    else:
+                        output.append('<li>%s</li>' % email)
+
+                # confirmation page should show email addresses of all recipients
+                return htmltext(''.join(output))
+
+
+        # shouldn't ever get here            
+        return htmltext('''<p class="alert">An error occurred emailing this page.</p>''')

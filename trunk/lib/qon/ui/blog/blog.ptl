@@ -634,7 +634,7 @@ class BlogItemUI(QonBaseUI):
         blocks.util.set_help_block(request, 'Discussion Item')
 
         # karma
-        if user is not self.item.author:
+        if user and user is not self.item.author:
             #self.item.author.karma_activity_credit_sampled()
             user.karma_activity_credit_sampled()
 
@@ -1120,7 +1120,7 @@ class BlogCommentUI(QonBaseUI):
         # comments are not watchable
         blocks.util.set_watchable_item(request, None)
                 
-        if self.comment.author is not get_user():
+        if get_user() and self.comment.author is not get_user():
             #self.comment.author.karma_activity_credit_sampled()
             get_user().karma_activity_credit_sampled()
         

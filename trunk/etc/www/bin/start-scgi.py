@@ -49,8 +49,8 @@ def create_site_publisher(site):
     publisher.config.display_exceptions = 0
     publisher.config.secure_errors = 1
     publisher.config.session_cookie_path = '/'
-    if local.BACKUPDELTA:
-        publisher.config.session_cookie_name= 'qx_backupdelta_session'
+#    if local.BACKUPDELTA:
+#        publisher.config.session_cookie_name= 'qx_backupdelta_session'
     site_log_dir = os.path.join(config.get(site, 'log-directory'), site)
     publisher.config.access_log = os.path.join(site_log_dir, 'access.log')
     publisher.config.error_log = error_log

@@ -1,7 +1,7 @@
 #!/www/python/bin/python
 """
 $URL: svn+ssh://svn.mems-exchange.org/repos/trunk/dulcinea/bin/unused_imports.py $
-$Id: unused_imports.py,v 1.1 2004/04/13 03:31:40 pierre Exp $
+$Id: $
 
 Reports imports of names that are not in code in the importing file.
 

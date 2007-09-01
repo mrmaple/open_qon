@@ -8,8 +8,8 @@ dbdir = '/www/var'
 repozodir = '/www/var/repobak'
 
 filename = 'qon.fs'
-destpaths = ['pierre@ginx.com:/www/var/delta.bak/',
-    'pierre@delta2.omidyar.net:/www/var/delta.bak/']
+destpaths = ['user@domain.com:/www/var/delta.bak/',
+    'user@domain.net:/www/var/delta.bak/']
 
 def main_repozo():
     global bindir, dbdir, repozodir, filename, destpaths

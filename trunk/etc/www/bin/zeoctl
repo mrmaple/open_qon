@@ -10,7 +10,7 @@
 # description: start a ZEO server
 
 PYTHON="/www/python/bin/python"
-ZEOCTL="/usr/local/bin/zeoctl.py"
+ZEOCTL="/usr/bin/zeoctl.py"
 
 CONFIG_FILE="/www/etc/zeo.conf"
 

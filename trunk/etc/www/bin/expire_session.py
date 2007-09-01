@@ -1,7 +1,7 @@
 #!/www/python/bin/python 
 """
 $URL: svn+ssh://svn.mems-exchange.org/repos/trunk/dulcinea/bin/expire_session.py $
-$Id: expire_session.py,v 1.2 2004/04/17 01:07:49 pierre Exp $
+$Id: $
 
 Delete sessions whose access time is older than the age passed in as an
 argument (in hours).

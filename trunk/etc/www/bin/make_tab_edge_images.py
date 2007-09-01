@@ -1,7 +1,7 @@
 #!/www/python/bin/python
 """
 $URL: svn+ssh://svn.mems-exchange.org/repos/trunk/dulcinea/bin/make_tab_edge_images.py $
-$Id: make_tab_edge_images.py,v 1.1 2004/04/13 03:31:40 pierre Exp $
+$Id: $
 
 Supports generating tab-edge png files in any color.
 

@@ -1,7 +1,7 @@
 #!/www/python/bin/python
 
 """$URL: svn+ssh://svn.mems-exchange.org/repos/trunk/dulcinea/bin/start-zeo.py $
-$Id: start-zeo.py,v 1.2 2004/04/12 21:05:51 pierre Exp $
+$Id: $
 
 Script invoked by the site command to start zeod.
 """

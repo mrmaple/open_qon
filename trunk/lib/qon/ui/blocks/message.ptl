@@ -1,5 +1,5 @@
 """
-$Id: message.ptl,v 1.11 2004/10/25 01:37:10 pierre Exp $
+$Id: $
 """
 from quixote import get_user
 from quixote.html import href

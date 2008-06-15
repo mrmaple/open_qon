@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/usr/bin/python2.4
 """
 $Id: cron-hourly.py,v 1.7 2007/02/03 23:52:50 alex Exp $
 
@@ -33,15 +33,16 @@ def update_stats():
     
 
 def main():
-    unsuccessful_recipients = ['jim@maplesong.com']
+    unsuccessful_recipients = ['jim@oublic.org']
     try:
+        import pdb; pdb.set_trace()
         open_database()
         update_stats()
         update_group_karma()
         close_database()
     except Exception, why:
         if 1:
-            sender = 'noreply@maplesong.com'
+            sender = 'noreply@ned.com'
             subject = "Warning: Hourly cron was unsuccessful"
             body = "To: %s\nFrom: %s\nSubject: %s\n\n%s\n\n" % (",".join(unsuccessful_recipients), sender, subject, why)
             server = smtplib.SMTP('localhost')

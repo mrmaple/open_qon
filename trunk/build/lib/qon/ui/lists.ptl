@@ -1,5 +1,5 @@
 """
-$Id: lists.ptl,v 1.7 2004/06/09 05:01:03 pierre Exp $
+$Id: $
 """
 __pychecker__ = "no-noeffect unusednames=request"
 

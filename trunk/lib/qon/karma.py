@@ -8,9 +8,9 @@ from BTrees import OIBTree
 from dulcinea.typeutils import typecheck
 
 min_karma_to_post = -24     # min karma required for a User to post/edit
-min_karma_to_show = -4      # min karma required for a BlogItem to be shown
+min_karma_to_show = -1     # min karma required for a BlogItem to be shown
 min_author_karma = -9       # min karma required of author for an item to be shown
-show_neg_threshold = -5     # level at which or below negative karma will no longer be anon
+show_neg_threshold = -1     # level at which or below negative karma will no longer be anon
 
 class NoKarmaToGive(Exception):
     """Raised when attempting to give karma out of an empty bank."""
@@ -492,7 +492,8 @@ class HasKarmaBank:
         """Give credit for activity. Random sampling to minimize db hits."""
         
         # over time, give 1/2 of subpoints_for_activity per sampled hit
-        if random.randint(1, 20) == 4:
+        if random.randint(1, 8) == 2:
+        #if True: 
             if self.get_karma_bank_balance() < self.activity_credit_max:
                 self._karma_subpoint(self.subpoints_for_activity * 10)
 

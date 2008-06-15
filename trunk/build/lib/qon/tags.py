@@ -11,7 +11,7 @@ Community-refined goals:
 Tags will help people use omidyar.net to:
 =========================================
 
-The goals of tagging are to help people use omidyar.net to: 
+The goals of tagging are to help people use ned.com to: 
 
 **1.  re-find content once they stumble upon it the first time by whatever 
     means (a la del.icio.us)** 
@@ -28,7 +28,7 @@ The goals of tagging are to help people use omidyar.net to:
     others to find them through those interests) 
     
 **3.  find content they haven't yet seen (another user-created way to 
-    traverse the user-created content on omidyar.net)** in a way that: 
+    traverse the user-created content on ned.com)** in a way that: 
     
     A.  enables new members to reach comfort level quickly and encourages 
     mentoring 
@@ -40,9 +40,9 @@ The goals of tagging are to help people use omidyar.net to:
     
     D. encourages action to make good things happen
 
-**4. track content in between visits to omidyar.net**
+**4. track content in between visits to ned.com**
     
-    A.  enables members to track content on omidyar.net without having to sign 
+    A.  enables members to track content on ned.com without having to sign 
     on to the community by watching certain tag lists 
     
     B.  enables members to subscribe to tags of interests to watch how others 

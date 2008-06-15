@@ -4,7 +4,7 @@
  * Created on June 17, 2004, 8:34 PM
  */
 
-// $Id: Server.java,v 1.2 2004/06/22 22:36:06 pierre Exp $
+// $Id: $
 
 import java.io.IOException;
 import org.apache.xmlrpc.WebServer;

@@ -1049,7 +1049,7 @@ class GroupTagsUI(QonBaseUI):
         '<h2>%s</h2>' % title
         '<br />'
 
-        item_oids = get_tags_database().get_tagged_items(tags)
+        item_oids = self.group.get_tagged_items(tags)
         if item_oids:
             '<TABLE><TR><TD WIDTH="90%">'
             qon.ui.blocks.tags.tagged_items_table(item_oids, tags)

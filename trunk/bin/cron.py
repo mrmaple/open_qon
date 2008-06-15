@@ -1,4 +1,4 @@
-#!/usr/local/bin/python
+#!/usr/bin/python2.4
 """
 $Id: cron.py,v 1.20 2007/06/20 16:20:50 jimc Exp $
 
@@ -154,6 +154,14 @@ def publish_stats():
         
         # set new revision - will commit
         qon.api.wiki_edit_page(wiki, page, page.name, author, page.versions[-1].title, raw)
+
+def backup_database():
+    import datetime
+    today = datetime.date.today()
+    sdt = today.strftime("%Y-%m-%d")
+    cmd = r"scp /www/var/qon.fs  jimc@mini:qon/qon-%s.fs" % sdt
+    os.system(cmd)
+
 
 def main():
     successful_recipients = ['jim@oublic.org']

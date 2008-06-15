@@ -3,6 +3,11 @@ Disallow: /search/
 Disallow: /text
 Disallow: /textfull
 Disallow: /prt
+Disallow: /home/tags
+Disallow: /user/tagged
 
 User-agent: Fasterfox
+Disallow: /
+
+User-agent: FunWebProducts
 Disallow: /

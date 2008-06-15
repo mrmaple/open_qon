@@ -53,12 +53,13 @@ setup(name= 'qon',
 
         ('/www/sites/qon/docroot', [
             'docroot/index.html',
-            #'docroot/favicon.ico',
+            'docroot/favicon.gif',
             'docroot/c1.jpg',
             'docroot/robots.txt',
             ]),
 
         ('/www/sites/qon/docroot/images', [
+            'docroot/images/nedbg.gif',
             'docroot/images/arrowBlank.gif',
             'docroot/images/arrowDown.gif',
             'docroot/images/arrowDownAlternative.gif',

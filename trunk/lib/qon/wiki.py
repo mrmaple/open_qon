@@ -122,6 +122,9 @@ class WikiLinkResolver(nodes.SparseNodeVisitor):
 
     def _look_up_wiki_page(self, node):
         refname = node['refname']
+
+        if node.hasattr('refuri') and node['refuri'].startswith("http:"):
+            return True
         
         try:
             orig_page_name = node['name']    # as user typed it

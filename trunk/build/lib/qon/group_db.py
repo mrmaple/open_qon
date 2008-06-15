@@ -151,7 +151,12 @@ class GroupDB(GenericDB, HasOwnership):
                                'private', 'public', 'social', 'orgs-general', \
                                'help', 'community-general', 'suggestions', \
                                'general-other')
-        top_level = [self.get_group(g) for g in top_level_group_ids]
+        top_level = []
+        for gid in top_level_group_ids:
+            g = self.get_group(gid)
+            if g:
+                top_level.append(g)
+
         return top_level
     
     #

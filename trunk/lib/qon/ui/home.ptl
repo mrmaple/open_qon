@@ -193,10 +193,12 @@ def _q_index [html] (request):
     if len(tags_n_counts) == tag_cloud_size:
         tag_cloud += 'This cloud shows the top %i tags.  You are welcome to browse <A HREF="/home/tags/">all of the tags</A>.<br /><br />' % (tag_cloud_size)
 
-    top_rated_content = '''
-    %s
-    ''' % blocks.search.hot_recently(get_user())
-
+    try:
+        top_rated_content = '''
+        %s
+        ''' % blocks.search.hot_recently(get_user())
+    except:
+        top_rated_content = ""    
     '''
     <!-- Begin Welcome, Stats and Alerts -->
     %s

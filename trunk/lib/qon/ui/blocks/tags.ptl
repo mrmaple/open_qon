@@ -24,6 +24,8 @@ from dulcinea.database import unpack_oid, pack_oid
 import re
 uglystuff = re.compile('[*+=~]{2,}|[-]{3,}|\.\. .+?(\Z|\n)|__ .+?(\Z|\n)|:\w+: \w+(\Z|\n)|::|[_`\|]+')
 
+non_alphanumeric = re.compile(r'\W')
+
 def suggested_tags (item, user, group=None):
     if user:
         user_id = user.get_user_id()
@@ -131,6 +133,14 @@ def color_interpolator (ratio, color1, color2):
 def web_color (color):
     return str("#%02X%02X%02X") % (color)
 
+def without_symbols(tag_n_count):
+    tag = tag_n_count[0]
+    try:
+        tag = non_alphanumeric.sub("", tag)
+    except:
+        pass
+    return tag
+
 def cloud [html] (tags_n_counts, container, path_prefix="./tags/", mini_cloud=False, item_id=None):
 
     # Lars's colors: cc9900-669933  yellowish to greenish
@@ -142,7 +152,12 @@ def cloud [html] (tags_n_counts, container, path_prefix="./tags/", mini_cloud=Fa
     min_count = min([count for tag, count in tags_n_counts])
     if min_count == max_count:
         max_count += 1
-    tags_n_counts.sort()
+
+    # create a first column with symbols stripped so that
+    # symbols don't put items first
+    #tags_n_counts = [(non_alphanumeric.sub("", tag), tag, count) for tag, count in tags_n_counts]
+
+    tags_n_counts.sort(key=without_symbols)
     tag_db = get_tags_database()
 
     cloud_id_attribute = ""
@@ -459,6 +474,8 @@ class TagsRssUI:
             entry.set_issued(date)
 	    if type(item) is qon.blog.BlogItem:
                 entry.set_created(item.date)
+            elif type(item) is User:
+                entry.set_created(item.last_login)
             else:
                 entry.set_created(item.watchable_last_change())
 

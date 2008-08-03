@@ -1390,6 +1390,8 @@ def header [html] (request, title=None, suppress_login=0,
         textsize_large=full_url('/images/textsize_large.gif'),
         )
 
+    sponsor_links(request)
+
     searchbox(request)
     
     _global_tabs(request)
@@ -1437,6 +1439,34 @@ def header [html] (request, title=None, suppress_login=0,
     '''
     <div class="documentContent" id="region-content">
     <a name="documentContent"></a>
+    '''
+
+def sponsor_links [html] (request):
+    '''
+<script type='text/javascript' src='http://the.betterworldmedianetwork.com/live/www/delivery/spcjs.php?id=1'></script>
+	
+    <DIV id="portal-sponsors">
+    <TABLE>
+	<TR>
+	   <TD colspan="3" align="center"> <script type='text/javascript'> OA_show(40) </script></TD>
+	</TR>
+	<TR>
+	   <TD> <script type='text/javascript'> OA_show(31) </script></TD>
+	   <TD> <script type='text/javascript'> OA_show(34) </script></TD>
+	   <TD> <script type='text/javascript'> OA_show(37) </script></TD>
+	</TR>
+	<TR>
+	   <TD> <script type='text/javascript'> OA_show(32) </script></TD>
+	   <TD> <script type='text/javascript'> OA_show(35) </script></TD>
+	   <TD> <script type='text/javascript'> OA_show(38) </script></TD>
+	</TR>
+	<TR>
+	   <TD> <script type='text/javascript'> OA_show(33) </script></TD>
+	   <TD> <script type='text/javascript'> OA_show(36) </script></TD>
+	   <TD> <script type='text/javascript'> OA_show(39) </script></TD>
+	</TR>
+    </TABLE>
+    </DIV>
     '''
 
 def left_margin [html] (request, suppress_login=0):

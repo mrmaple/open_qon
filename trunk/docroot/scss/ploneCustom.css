@@ -155,6 +155,11 @@ pre {
     width: 219px;
     cursor: pointer;
 }
+#portal-sponsors {
+    left: 260px;
+    top: 15px;
+    position: absolute;
+}
 #portal-globalnav li a {
     border-color: #bdd297;
     color: #666666;

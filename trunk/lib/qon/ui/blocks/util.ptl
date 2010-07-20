@@ -1390,7 +1390,7 @@ def header [html] (request, title=None, suppress_login=0,
         textsize_large=full_url('/images/textsize_large.gif'),
         )
 
-    sponsor_links(request)
+    #sponsor_links(request)
 
     searchbox(request)
     
@@ -1526,7 +1526,7 @@ def footer [html] (title=None, additional_omniture_variables={}):
     <div id="portal-footer">
     <p>
     '''
-    _('Copyright &copy; 2004-2008, ned.com. All rights reserved.')
+    _('Copyright &copy; 2004-2010, ned.com. All rights reserved.')
     '''<br />'''
     _('''Use of this site constitutes acceptance of the ned.com
     <a href="%s">User Agreement</a> and <a href="%s">Privacy Policy</a>.''' % (path_to_user_agreement(),
@@ -2380,8 +2380,8 @@ def cookie_this_page(obj):
         return
 
     from qon.ui.util import set_cookie
-    set_cookie("last_title", urllib.quote(formatted_display_name_plain(obj)), expires='Fri, 01-Jan-2010 00:00:00 GMT')
-    set_cookie("last_url", path_to_obj(obj), expires='Fri, 01-Jan-2010 00:00:00 GMT')
+    set_cookie("last_title", urllib.quote(formatted_display_name_plain(obj)), expires='Fri, 01-Jan-2014 00:00:00 GMT')
+    set_cookie("last_url", path_to_obj(obj), expires='Fri, 01-Jan-2014 00:00:00 GMT')
 
 
 

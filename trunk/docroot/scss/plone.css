@@ -334,7 +334,7 @@ del {
     padding: 0;
     text-align: right;
     text-transform: lowercase;
-    width: 50%;
+    width: 280px;
     white-space: nowrap;
     z-index: 2;
 }

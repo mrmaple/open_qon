@@ -22,7 +22,7 @@ def unwatch(request, item):
         user.get_watch_list().stop_watching_item(item)
     return request.redirect('.')
 
-def set_cookie(name, value, expires='Fri, 01-Jan-2010 00:00:00 GMT', **attrs):
+def set_cookie(name, value, expires='Fri, 01-Jan-2014 00:00:00 GMT', **attrs):
     """Set a persistent cookie with appropriate path and domain"""
     request = get_request()
     config = get_publisher().config

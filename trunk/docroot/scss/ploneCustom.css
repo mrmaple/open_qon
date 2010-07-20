@@ -3,7 +3,7 @@ h1, h2, h3, h4, h5, h6 { clear: both }
 /* plone style customizations */
 body {
     font-family: 75% "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;
-    background-image: url('/images/nedbg.gif'); background-repeat: repeat-y;
+/*    background-image: url('/images/nedbg.gif'); background-repeat: repeat-y; */
 }
 h1, h2, h3, h4, h5, h6 {
     font-family: "Trebuchet MS", Verdana, Lucida, Helvetica, Arial, sans-serif;

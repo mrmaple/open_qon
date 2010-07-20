@@ -8,7 +8,7 @@ SUPPRESS_EMAIL = 0
 # Used as the default SMTP sender for mail sent by the site (ie. by
 # dulcinea.sendmail.sendmail()), so that any bounces will go to us.
 MAIL_SMTP_SENDER = 'ned.com <folks@ned.com>'
-MAIL_SERVER = 'smtp.gmavt.net'
+MAIL_SERVER = 'localhost'
 
 # Set to prohibit file uploads
 NO_FILE_UPLOAD = False

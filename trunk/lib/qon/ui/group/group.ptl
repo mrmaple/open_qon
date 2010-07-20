@@ -1022,12 +1022,12 @@ class GroupTagsUI(QonBaseUI):
         </p>
         '''
 
-        item_oids = get_tags_database().get_items(self.tag)
+        item_oids = None #get_tags_database().get_items(self.tag)
 
         if item_oids:
             blocks.tags.tagged_items_table(item_oids)
         else:
-            "Nothing has been tagged with %s." % self.tag
+            "Nothing has been tagged with %s." % "that" #self.tag
 
         blocks.util.footer()
 

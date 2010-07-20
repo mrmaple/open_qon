@@ -28,7 +28,7 @@ class QonSessionManager(DulcineaSessionManager):
     
     def set_session_cookie(self, request, session_id):
         """Make the session cookie persistent."""
-        self._set_cookie(request, session_id, expires='Fri, 01-Jan-2010 00:00:00 GMT')
+        self._set_cookie(request, session_id, expires='Fri, 01-Jan-2014 00:00:00 GMT')
     
     def delete_session(self, session_id):
         if self.has_key(session_id):

@@ -31,30 +31,63 @@ onPageLoad = function() {
     }
     
     showControlMenu();
+
+//    var commentEntry = MochiKit.DOM.getElementsByTagAndClassName("textarea")[0];
+//    if (null == commentEntry) {
+//        return;
+//    }
+//    MochiKit.Signal.connect(commentEntry, "onkeypress", checkShortcuts);
 }
 MochiKit.Signal.connect(window, "onload", onPageLoad);
 
 controlCell = function() {
     var commentEntry = MochiKit.DOM.getElementsByTagAndClassName("textarea")[0];
+    if (null == commentEntry) {
+        return null;
+    }
     //MochiKit.DOM.insertSiblingNodesAfter(commentEntry, helpers); // if span above
-    var nextCell = commentEntry.parentElement.nextElementSibling;
+    var nextCell = commentEntry.parentNode.nextSibling;
+    //var nextCell = commentEntry.parentElement.nextElementSibling;
     return nextCell;
 }
 
 showControlMenu = function() {
+    var cs = controlCell();
+    if (null == cs) {
+        return;
+    }
     var d = MochiKit.DOM;
     var helpers = d.TD({id:"comment_help"}, 
-      d.A({'onclick':'showInsertLink()', 'href':'javascript:void(0);'}, 'Insert link'), d.BR(),
-      d.A({'onclick':'showInsertImage()', 'href':'javascript:void(0);'}, 'Upload image and insert link'));
-    var cs = controlCell();
+      d.A({'onclick':'showInsertLink()', 'href':'javascript:void(0);'}, 'Insert link'), d.BR()
+      );//d.A({'onclick':'showInsertImage()', 'href':'javascript:void(0);'}, 'Upload image and insert link'));
     MochiKit.DOM.swapDOM(cs, helpers);
 }
 
-row_display = function (row) {
-    return TR(null, map(partial(TD, null), row));
+checkShortcuts = function(event)
+{
+    var code = event.key().code;
+    var mods = event.modifier();
+
+    if (code == 76 && (mods.meta || mods.ctrl)) 
+    {
+        event.preventDefault();
+        showInsertLink(null);
+    }
+}
+
+preventDefaultInsertLink = function(event)
+{
+    if (event.key().code == 13) {
+        event.preventDefault();
+        insertLink(null);
+    }
 }
 
 showInsertLink = function(event) {
+    var cs = controlCell();
+    if (null == cs) {
+        return;
+    }
     var d = MochiKit.DOM;
     var ta = MochiKit.DOM.getElementsByTagAndClassName("textarea")[0];
     var selected = '';
@@ -65,31 +98,42 @@ showInsertLink = function(event) {
     
     var helpers = d.TD({id:"link_inserter"}, 
       d.TABLE(null, 
-          TR(null, TD(null, "Text to show:"), TD(null, d.INPUT({'type':'text', 'id':'new_showas', 'name': 'show_as'})) ),
+          TR(null, TD(null, "Show:"), TD(null, d.INPUT({'type':'text', 'id':'new_showas', 'name': 'show_as'})) ),
           TR(null, TD(null, "Link:"), TD(null, d.INPUT({'type':'text', 'id':'new_link', 'name': 'link'})) )
       ),
-      d.A({'onclick':'showControlMenu()', 'href':'javascript:void(0);'}, 'Not Just Yet'), " ",
+      d.A({'onclick':'showControlMenu()', 'href':'javascript:void(0);'}, 'Cancel'), " | ",
       d.A({'onclick':'insertLink()', 'href':'javascript:void(0);'}, 'Insert Link') 
       );
-    var cs = controlCell();
     MochiKit.DOM.swapDOM(cs, helpers);
+    var link = MochiKit.DOM.getElement("new_link");
+    var showas = MochiKit.DOM.getElement("new_showas");
+    MochiKit.Signal.connect(link, 'onkeypress', preventDefaultInsertLink);
+    MochiKit.Signal.connect(showas, 'onkeypress', preventDefaultInsertLink);
 }
 
 insertLink = function(event) {
     var link = MochiKit.DOM.getElement("new_link").value;
-    if (link.slice(0, 7) != "http://")
-    {
-        link = "http://" + link;
-    }
     var showas = MochiKit.DOM.getElement("new_showas").value;
     var ta = MochiKit.DOM.getElementsByTagAndClassName("textarea")[0];
     var cursorPos = ta.selectionEnd;
+    var newCursorPos = cursorPos + showas.length + 4;
     var oldText = ta.value;
-    var newText = oldText.slice(0, cursorPos) + '`' + showas + '`_'
-     + oldText.slice(cursorPos) + " "
-     + "\n.. _`" + showas + "`: " + link;
+    var newText = oldText.slice(0, cursorPos) 
+     + '`' + showas + '`_ '
+     + oldText.slice(cursorPos);
+    if (link.length > 3) 
+    {
+        if (link.slice(0, 7) != "http://")
+        {
+            link = "http://" + link;
+        }
+        newText = newText + "\n\n.. _`" + showas + "`: " + link;
+    }
     ta.value = newText;
     showControlMenu();
+    ta.focus();
+    ta.selectionBegin = newCursorPos;
+    ta.selectionEnd = newCursorPos;
 }
 
 showInsertImage = function(event) {
